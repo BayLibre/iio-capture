@@ -19,13 +19,26 @@
 #include <getopt.h>
 #include <iio.h>
 #include <signal.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #define MY_NAME "iio-capture"
 
 #define SAMPLES_PER_READ 256
 #define DEFAULT_FREQ_HZ  100
+
+
+/* Wip */
+#define MAX_CHANNELS 10
+
+int chn_min[MAX_CHANNELS];
+int chn_max[MAX_CHANNELS];
+double chn_avg[MAX_CHANNELS];
+double chn_scl[MAX_CHANNELS];
+long long chn_add[MAX_CHANNELS];
+long long chn_cnt[MAX_CHANNELS];
 
 static const struct option options[] = {
 	  {"help", no_argument, 0, 'h'},
@@ -33,7 +46,6 @@ static const struct option options[] = {
 	  {"usb", required_argument, 0, 'u'},
 	  {"trigger", required_argument, 0, 't'},
 	  {"buffer-size", required_argument, 0, 'b'},
-	  {"samples", required_argument, 0, 's' },
 	  {0, 0, 0, 0},
 };
 
@@ -43,7 +55,6 @@ static const char *options_descriptions[] = {
 	"Use the USB backend with the device that matches the given VID/PID.",
 	"Use the specified trigger.",
 	"Size of the capture buffer. Default is 256.",
-	"Number of samples to capture, 0 = infinite. Default is 0."
 };
 
 static void usage(void)
@@ -51,7 +62,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-			"[-t <trigger>] [-b <buffer-size>] [-s <samples>] "
+			"[-t <trigger>] [-b <buffer-size>] "
 			"<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -62,15 +73,23 @@ static void usage(void)
 static struct iio_context *ctx;
 struct iio_buffer *buffer;
 static const char *trigger_name = NULL;
-unsigned int num_samples;
+unsigned int nb_samples;
+unsigned int nb_channels;
 
 static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
 
 static void quit_all(int sig)
 {
+	int i;
 	exit_code = sig;
 	app_running = false;
+
+	for (i=0; i< nb_channels; i++)	{
+		printf("min[%d] = %f mSI\n", chn_min[i] * chn_scl[i]);
+		printf("max[%d] = %f mSI\n", chn_max[i] * chn_scl[i]);
+		printf("avg[%d] = %f mSI\n", chn_scl[i] * chn_scl[i]); 
+	}
 }
 
 static void set_handler(int signal_nb, void (*handler)(int))
@@ -112,26 +131,48 @@ static struct iio_device * get_device(const struct iio_context *ctx,
 static ssize_t print_sample(const struct iio_channel *chn,
 		void *buf, size_t len, void *d)
 {
-	fwrite(buf, 1, len, stdout);
-	if (num_samples != 0) {
-		num_samples--;
-		if (num_samples == 0) {
-			quit_all(EXIT_SUCCESS);
-			return -1;
-		}
-	}
+//	fwrite(buf, 1, len, stdout);
+	char *id;
+	int idx;
+	short val = *(short*)buf;
+	short vabs = 0;
+
+	id = iio_channel_get_id(chn);
+
+	idx = id[strlen(id)-1];
+
+	if ((idx > '9') || (idx < '0'))
+		return len;
+
+	idx -= '0';
+
+	vabs = abs(val);
+
+	if (abs(chn_min[idx]) > vabs)
+		chn_min[idx] = val;
+	
+	if (abs(chn_max[idx]) < vabs)
+		chn_max[idx] = val;
+
+	chn_add[idx] += vabs;
+	chn_cnt[idx]++;
+
+	chn_avg[idx] = chn_avg[idx] + ((double)(val) - chn_avg[idx]) / chn_cnt[idx];
+
+	nb_samples++;
+
 	return len;
 }
 
 int main(int argc, char **argv)
 {
-	unsigned int i, nb_channels;
+	unsigned int i;
 	unsigned int buffer_size = SAMPLES_PER_READ;
 	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
 	struct iio_device *dev;
 	size_t sample_size;
 
-	while ((c = getopt_long(argc, argv, "+hn:u:t:b:s:",
+	while ((c = getopt_long(argc, argv, "+hn:u:t:b:",
 					options, &option_index)) != -1) {
 		switch (c) {
 		case 'h':
@@ -152,10 +193,6 @@ int main(int argc, char **argv)
 		case 'b':
 			arg_index += 2;
 			buffer_size = atoi(argv[arg_index]);
-			break;
-		case 's':
-			arg_index += 2;
-			num_samples = atoi(argv[arg_index]);
 			break;
 		case '?':
 			return EXIT_FAILURE;
@@ -239,6 +276,19 @@ int main(int argc, char **argv)
 
 	nb_channels = iio_device_get_channels_count(dev);
 
+	nb_samples = 0;
+
+	for (i = 0; i < nb_channels; i++) {
+		char buf[1024];
+		chn_min[i] = 0xffff;
+		chn_max[i] = chn_add[i] = 0;
+
+		if (iio_channel_attr_read(iio_device_get_channel(dev, i), "scale", buf, sizeof(buf)) >=0)
+			chn_scl[i] = atof(buf);
+		else
+			chn_scl[i] = 1.0;
+	}
+
 	if (argc == arg_index + 2) {
 		/* Enable all channels */
 		for (i = 0; i < nb_channels; i++)
@@ -273,7 +323,8 @@ int main(int argc, char **argv)
 			break;
 		}
 
-		/* If there are only the samples we requested, we don't need to
+#if 0	
+	/* If there are only the samples we requested, we don't need to
 		 * demux */
 		if (iio_buffer_step(buffer) == sample_size) {
 			void *start = iio_buffer_start(buffer);
@@ -281,8 +332,8 @@ int main(int argc, char **argv)
 				(intptr_t) start;
 			size_t read_len;
 
-			if (num_samples && len > num_samples * sample_size)
-				len = num_samples * sample_size;
+			if (nb_samples && len > nb_samples * sample_size)
+				len = nb_samples * sample_size;
 
 			for (read_len = len; len; ) {
 				ssize_t nb = fwrite(start, 1, len, stdout);
@@ -295,14 +346,15 @@ int main(int argc, char **argv)
 				start = (void *)((intptr_t) start + nb);
 			}
 
-			if (num_samples) {
-				num_samples -= read_len / sample_size;
-				if (!num_samples)
+			if (nb_samples) {
+				nb_samples -= read_len / sample_size;
+				if (!nb_samples)
 					quit_all(EXIT_SUCCESS);
 			}
 		} else {
+#endif
 			iio_buffer_foreach_sample(buffer, print_sample, NULL);
-		}
+//		}
 	}
 
 err_destroy_buffer:

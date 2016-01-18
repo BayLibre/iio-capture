@@ -13,9 +13,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # Lesser General Public License for more details.
 
+kversion=$(shell uname -r)
+
 TARGETS := iio-capture
 
-CFLAGS = -Wall -g -O1
+CFLAGS = -Wall -g -O1 
 
 .PHONY: all clean
 

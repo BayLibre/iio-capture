@@ -7,6 +7,8 @@ based on iio-readdev (Paul Cerceuil)
 - compute energy for power channel
 - listen to sigaction SIGTERM to stop record
 
+Note: This is slightly hardcoded for the ACME board ATM.
+
 # Usage #
 
 * call iio-capture with the IP address of the ACME board, and device ID matching the probe. 
@@ -17,7 +19,7 @@ based on iio-readdev (Paul Cerceuil)
 All units are milli-SI
 
 ```
-powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ ./iio-capture -n baylibre-acme.local iio:device1 & 
+powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ ./iio-capture -n lab-baylibre-acme.local iio:device1 & 
 [1] 10667
 
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ kill -2 10667 

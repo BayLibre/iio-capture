@@ -23,13 +23,12 @@ powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ ./iio-capture -n lab-baylibre-a
 [1] 10667
 
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ kill -2 10667 
-	 "voltage0_max":	 "2935.00",
-	 "voltage1_max":	 "5125.00",
-	 "power2_max":	 "1525.00",
-	 "power2_avg":	 "1525.00",
-	 "power2_min":	 "1525.00",
-	 "energy":	 "821.89",
-	 "current3_max":	 "294.00",
-	 "current3_min":	 "293.00",
+	 "voltage_max":	 "5110.00",
+	 "power_max":	 "2475.00",
+	 "power_avg":	 "1981.45",
+	 "power_min":	 "1925.00",
+	 "energy":	 "533.95",
+	 "current_max":	 "484.00",
+	 "current_min":	 "378.00",
 ```
 

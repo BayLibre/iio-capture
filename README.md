@@ -7,28 +7,27 @@ based on iio-readdev (Paul Cerceuil)
 - compute energy for power channel
 - listen to sigaction SIGTERM to stop record
 
+# Usage #
 
-# WIP: test output #
+* call iio-capture with the IP address of the ACME board, and device ID matching the probe. 
+* Send a TERM signal to stop recording.
+
+# Output #
+
+All units are milli-SI
 
 ```
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ ./iio-capture -n baylibre-acme.local iio:device1 & 
 [1] 10667
 
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ kill -2 10667 
-min[-1675414144] = 2930.000000 mSI
-max[-1740703376] = 2937.500000 mSI
-avg[-1740703376] = 6.250000 mSI
-min[-1740703376] = 5122.500000 mSI
-max[-1740703376] = 5125.000000 mSI
-avg[-1740703376] = 1.562500 mSI
-min[-1740703376] = 1525.000000 mSI
-max[-1740703376] = 1525.000000 mSI
-avg[-1740703376] = 625.000000 mSI
-min[-1740703376] = 293.000000 mSI
-max[-1740703376] = 294.000000 mSI
-avg[-1740703376] = 1.000000 mSI
-min[-1740703376] = 65535.000000 mSI
-max[-1740703376] = 0.000000 mSI
-avg[-1740703376] = 1.000000 mSI
+	 "voltage0_max":	 "2935.00",
+	 "voltage1_max":	 "5125.00",
+	 "power2_max":	 "1525.00",
+	 "power2_avg":	 "1525.00",
+	 "power2_min":	 "1525.00",
+	 "energy":	 "821.89",
+	 "current3_max":	 "294.00",
+	 "current3_min":	 "293.00",
 ```
 

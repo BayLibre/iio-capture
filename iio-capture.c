@@ -1,8 +1,10 @@
 /*
  * libiio - Library for interfacing industrial I/O (IIO) devices
  *
- * Copyright (C) 2014 Analog Devices, Inc.
+ * Copyright (C) 2016 BayLibre SAS, parts Analog Devices, Inc.
+ *
  * Author: Paul Cercueil <paul.cercueil@analog.com>
+ * Marc Titinger <mtitinger@baylibre.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,30 +25,49 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 
 #define MY_NAME "iio-capture"
 
 #define SAMPLES_PER_READ 256
 #define DEFAULT_FREQ_HZ  100
 
+static long long sampling_freq;
 
-/* Wip */
 #define MAX_CHANNELS 10
 
-int chn_min[MAX_CHANNELS];
-int chn_max[MAX_CHANNELS];
-double chn_avg[MAX_CHANNELS];
-double chn_scl[MAX_CHANNELS];
-long long chn_add[MAX_CHANNELS];
-long long chn_cnt[MAX_CHANNELS];
+/*
+ * Trivial helper structure for a scan_element.
+ */
+struct my_channel {
+	const char *label;
+	const char *unit;
+	int min;
+	int max;
+	double scale;
+	double avg;		/* moving average */
+	double energy;		/* linear integration over time */
+	int frequency;		/* sampling freq of channel */
+	long long count;	/* sample count */
+
+#define HAS_NRJ	0x01
+#define HAS_MIN 0x02
+#define HAS_AVG 0x04
+#define HAS_MAX 0x08
+	unsigned int flags;
+};
+
+static unsigned int nb_channels;
+static unsigned int nb_samples;
+static struct my_channel my_chn[MAX_CHANNELS];
 
 static const struct option options[] = {
-	  {"help", no_argument, 0, 'h'},
-	  {"network", required_argument, 0, 'n'},
-	  {"usb", required_argument, 0, 'u'},
-	  {"trigger", required_argument, 0, 't'},
-	  {"buffer-size", required_argument, 0, 'b'},
-	  {0, 0, 0, 0},
+	{"help", no_argument, 0, 'h'},
+	{"network", required_argument, 0, 'n'},
+	{"usb", required_argument, 0, 'u'},
+	{"trigger", required_argument, 0, 't'},
+	{"buffer-size", required_argument, 0, 'b'},
+	{0, 0, 0, 0},
 };
 
 static const char *options_descriptions[] = {
@@ -62,22 +83,42 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-			"[-t <trigger>] [-b <buffer-size>] "
-			"<iio_device> [<channel> ...]\n\nOptions:\n");
+	       "[-t <trigger>] [-b <buffer-size>] "
+	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
-					options[i].val, options[i].name,
-					options_descriptions[i]);
+		       options[i].val, options[i].name,
+		       options_descriptions[i]);
 }
 
 static struct iio_context *ctx;
 struct iio_buffer *buffer;
 static const char *trigger_name = NULL;
-unsigned int nb_samples;
-unsigned int nb_channels;
 
 static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
+
+/* Create report compatible with JSON form */
+static void channel_report(int i)
+{
+
+	if (my_chn[i].flags & HAS_MAX)
+		printf("\t \"%s_max\":\t \"%5.2f\",\n", my_chn[i].label,
+		       my_chn[i].max * my_chn[i].scale);
+
+	if (my_chn[i].flags & HAS_AVG)
+		printf("\t \"%s_avg\":\t \"%5.2f\",\n", my_chn[i].label,
+		       my_chn[i].avg * my_chn[i].scale);
+
+	if (my_chn[i].flags & HAS_MIN)
+		printf("\t \"%s_min\":\t \"%5.2f\",\n", my_chn[i].label,
+		       my_chn[i].min * my_chn[i].scale);
+
+	/*only power channel is expected to have energy */
+	if (my_chn[i].flags & HAS_NRJ)
+		printf("\t \"energy\":\t \"%5.2f\",\n",
+		       my_chn[i].energy / sampling_freq);
+}
 
 static void quit_all(int sig)
 {
@@ -85,14 +126,11 @@ static void quit_all(int sig)
 	exit_code = sig;
 	app_running = false;
 
-	for (i=0; i< nb_channels; i++)	{
-		printf("min[%d] = %5.2f mSI\n", i, chn_min[i] * chn_scl[i]);
-		printf("max[%d] = %5.2f mSI\n", i, chn_max[i] * chn_scl[i]);
-		printf("avg[%d] = %5.2f mSI\n", i, chn_scl[i] * chn_scl[i]); 
-	}
+	for (i = 0; i < nb_channels; i++)
+		channel_report(i);
 }
 
-static void set_handler(int signal_nb, void (*handler)(int))
+static void set_handler(int signal_nb, void (*handler) (int))
 {
 #ifdef _WIN32
 	signal(signal_nb, handler);
@@ -104,8 +142,8 @@ static void set_handler(int signal_nb, void (*handler)(int))
 #endif
 }
 
-static struct iio_device * get_device(const struct iio_context *ctx,
-		const char *id)
+static struct iio_device *get_device(const struct iio_context *ctx,
+				     const char *id)
 {
 
 	unsigned int i, nb_devices = iio_context_get_devices_count(ctx);
@@ -128,40 +166,89 @@ static struct iio_device * get_device(const struct iio_context *ctx,
 	return NULL;
 }
 
-static ssize_t print_sample(const struct iio_channel *chn,
-		void *buf, size_t len, void *d)
+static inline int chan_index(const struct iio_channel *chn)
 {
-//	fwrite(buf, 1, len, stdout);
-	const char *id;
-	int idx;
-	short val = *(short*)buf;
-	short vabs = 0;
+	const char *id = iio_channel_get_id(chn);
 
-	id = iio_channel_get_id(chn);
-
-	idx = id[strlen(id)-1];
+	int idx = id[strlen(id) - 1];
 
 	if ((idx > '9') || (idx < '0'))
-		return len;
+		return -1;
 
-	idx -= '0';
+	return idx - '0';
+}
+
+static ssize_t print_sample(const struct iio_channel *chn,
+			    void *buf, size_t len, void *d)
+{
+//      fwrite(buf, 1, len, stdout);
+	short val = *(short *)buf;
+	short vabs = 0;
+	int i;
+
+	i = chan_index(chn);
+	if (i < 0)
+		return len;
 
 	vabs = abs(val);
 
-	if (abs(chn_min[idx]) > vabs)
-		chn_min[idx] = val;
-	
-	if (abs(chn_max[idx]) < vabs)
-		chn_max[idx] = val;
+	if (abs(my_chn[i].min) > vabs)
+		my_chn[i].min = val;
 
-	chn_add[idx] += vabs;
-	chn_cnt[idx]++;
+	if (abs(my_chn[i].max) < vabs)
+		my_chn[i].max = val;
 
-	chn_avg[idx] = chn_avg[idx] + ((double)(val) - chn_avg[idx]) / chn_cnt[idx];
+	my_chn[i].count++;
+
+	if (my_chn[i].flags & HAS_AVG)
+		my_chn[i].avg +=
+		    ((double)(val) - my_chn[i].avg) / my_chn[i].count;
+
+	if (my_chn[i].flags & HAS_NRJ)
+		my_chn[i].energy += (double)val;
 
 	nb_samples++;
 
 	return len;
+}
+
+static void init_channels(struct iio_device *dev)
+{
+	int i;
+	char buf[1024];
+	struct iio_channel *ch;
+
+	nb_channels = iio_device_get_channels_count(dev);
+
+	nb_samples = 0;
+
+	/* FIXME: dyn alloc */
+	assert(nb_samples <= MAX_CHANNELS);
+
+	for (i = 0; i < nb_channels; i++) {
+		ch = iio_device_get_channel(dev, i);
+
+		my_chn[i].min = 0xffff;
+		my_chn[i].max = 0;
+
+		if (iio_channel_attr_read(ch, "scale", buf, sizeof(buf)) >= 0)
+			my_chn[i].scale = atof(buf);
+		else
+			my_chn[i].scale = 1.0;
+
+		my_chn[i].label = iio_channel_get_id(ch);
+
+		/* skip timestamp, cheesy fashon */
+		if (strncmp(my_chn[i].label, "timestamp", 9))
+			my_chn[i].flags |= HAS_MAX;
+
+		if (!strncmp(my_chn[i].label, "power", 5)) {
+			my_chn[i].flags |= HAS_MIN | HAS_AVG;
+			if (sampling_freq)
+				my_chn[i].flags |= HAS_NRJ;
+		} else if (!strncmp(my_chn[i].label, "current", 6))
+			my_chn[i].flags |= HAS_MIN;
+	}
 }
 
 int main(int argc, char **argv)
@@ -170,10 +257,10 @@ int main(int argc, char **argv)
 	unsigned int buffer_size = SAMPLES_PER_READ;
 	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
 	struct iio_device *dev;
-//	size_t sample_size;
+	char temp[1024];
 
 	while ((c = getopt_long(argc, argv, "+hn:u:t:b:",
-					options, &option_index)) != -1) {
+				options, &option_index)) != -1) {
 		switch (c) {
 		case 'h':
 			usage();
@@ -224,8 +311,8 @@ int main(int argc, char **argv)
 			return EXIT_FAILURE;
 		}
 
-		ctx = iio_create_usb_context(
-				(unsigned short) vid, (unsigned short) pid);
+		ctx = iio_create_usb_context((unsigned short)vid,
+					     (unsigned short)pid);
 	} else {
 		ctx = iio_create_default_context();
 	}
@@ -234,8 +321,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Unable to create IIO context\n");
 		return EXIT_FAILURE;
 	}
-
-
 #ifndef _WIN32
 	set_handler(SIGHUP, &quit_all);
 #endif
@@ -267,27 +352,20 @@ int main(int argc, char **argv)
 		 * fail gracefully to remain compatible.
 		 */
 		if (iio_device_attr_write_longlong(trigger,
-				"sampling_frequency", DEFAULT_FREQ_HZ) < 0)
-			iio_device_attr_write_longlong(trigger,
-				"frequency", DEFAULT_FREQ_HZ);
+						   "sampling_frequency",
+						   DEFAULT_FREQ_HZ) < 0)
+			iio_device_attr_write_longlong(trigger, "frequency",
+						       DEFAULT_FREQ_HZ);
 
 		iio_device_set_trigger(dev, trigger);
 	}
 
-	nb_channels = iio_device_get_channels_count(dev);
+	/* store actual sampling freq */
+	c = iio_device_attr_read(dev, "in_sampling_frequency", temp, 1024);
+	if (c)
+		sampling_freq = atoi(temp);
 
-	nb_samples = 0;
-
-	for (i = 0; i < nb_channels; i++) {
-		char buf[1024];
-		chn_min[i] = 0xffff;
-		chn_max[i] = chn_add[i] = 0;
-
-		if (iio_channel_attr_read(iio_device_get_channel(dev, i), "scale", buf, sizeof(buf)) >=0)
-			chn_scl[i] = atof(buf);
-		else
-			chn_scl[i] = 1.0;
-	}
+	init_channels(dev);
 
 	if (argc == arg_index + 2) {
 		/* Enable all channels */
@@ -300,13 +378,11 @@ int main(int argc, char **argv)
 			for (j = arg_index + 2; j < argc; j++) {
 				const char *n = iio_channel_get_name(ch);
 				if (!strcmp(argv[j], iio_channel_get_id(ch)) ||
-						(n && !strcmp(n, argv[j])))
+				    (n && !strcmp(n, argv[j])))
 					iio_channel_enable(ch);
 			}
 		}
 	}
-
-//	sample_size = iio_device_get_sample_size(dev);
 
 	buffer = iio_device_create_buffer(dev, buffer_size, false);
 	if (!buffer) {
@@ -319,45 +395,12 @@ int main(int argc, char **argv)
 		int ret = iio_buffer_refill(buffer);
 		if (ret < 0) {
 			fprintf(stderr, "Unable to refill buffer: %s\n",
-					strerror(-ret));
+				strerror(-ret));
 			break;
 		}
-
-#if 0	
-	/* If there are only the samples we requested, we don't need to
-		 * demux */
-		if (iio_buffer_step(buffer) == sample_size) {
-			void *start = iio_buffer_start(buffer);
-			ptrdiff_t len = (intptr_t) iio_buffer_end(buffer) -
-				(intptr_t) start;
-			size_t read_len;
-
-			if (nb_samples && len > nb_samples * sample_size)
-				len = nb_samples * sample_size;
-
-			for (read_len = len; len; ) {
-				ssize_t nb = fwrite(start, 1, len, stdout);
-				if (nb < 0) {
-					fprintf(stderr, "Unable to write data!\n");
-					goto err_destroy_buffer;
-				}
-
-				len -= nb;
-				start = (void *)((intptr_t) start + nb);
-			}
-
-			if (nb_samples) {
-				nb_samples -= read_len / sample_size;
-				if (!nb_samples)
-					quit_all(EXIT_SUCCESS);
-			}
-		} else {
-#endif
-			iio_buffer_foreach_sample(buffer, print_sample, NULL);
-//		}
+		iio_buffer_foreach_sample(buffer, print_sample, NULL);
 	}
 
-//err_destroy_buffer:
 	iio_buffer_destroy(buffer);
 	iio_context_destroy(ctx);
 	return exit_code;

@@ -1,1 +1,1 @@
-./iio-capture -n baylibre-acme.local iio:device1
+./iio-capture -n lab-baylibre-acme.local iio:device1

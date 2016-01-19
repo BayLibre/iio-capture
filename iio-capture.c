@@ -40,7 +40,7 @@ static long long sampling_freq;
  * Trivial helper structure for a scan_element.
  */
 struct my_channel {
-	const char *label;
+	char label[128];
 	const char *unit;
 	int min;
 	int max;
@@ -212,12 +212,17 @@ static ssize_t print_sample(const struct iio_channel *chn,
 	return len;
 }
 
-static void init_channels(struct iio_device *dev)
+static void init_ina2xx_channels(struct iio_device *dev)
 {
 	int i;
 	char buf[1024];
 	struct iio_channel *ch;
 
+	if (strcmp(iio_device_get_name(dev),"ina226")) {
+		fprintf(stderr, "Unknown device %s\n", iio_device_get_name(dev));
+		exit(-1);
+	}
+		
 	nb_channels = iio_device_get_channels_count(dev);
 
 	nb_samples = 0;
@@ -226,28 +231,41 @@ static void init_channels(struct iio_device *dev)
 	assert(nb_samples <= MAX_CHANNELS);
 
 	for (i = 0; i < nb_channels; i++) {
+		const char* id;
 		ch = iio_device_get_channel(dev, i);
 
 		my_chn[i].min = 0xffff;
 		my_chn[i].max = 0;
+		my_chn[i].flags = 0;
+
+		id = iio_channel_get_id(ch);
+
+		/* skip timestamp, and vshunt, cheesy fashon */
+		if (!strcmp(id, "timestamp") || !strcmp(id, "voltage0"))
+			continue;
 
 		if (iio_channel_attr_read(ch, "scale", buf, sizeof(buf)) >= 0)
 			my_chn[i].scale = atof(buf);
 		else
 			my_chn[i].scale = 1.0;
 
-		my_chn[i].label = iio_channel_get_id(ch);
+		my_chn[i].flags = HAS_MAX;
 
-		/* skip timestamp, cheesy fashon */
-		if (strncmp(my_chn[i].label, "timestamp", 9))
-			my_chn[i].flags |= HAS_MAX;
-
-		if (!strncmp(my_chn[i].label, "power", 5)) {
-			my_chn[i].flags |= HAS_MIN | HAS_AVG;
+		if (!strncmp(id, "power", 5)) {
+			my_chn[i].flags |= HAS_MIN|HAS_AVG;
 			if (sampling_freq)
 				my_chn[i].flags |= HAS_NRJ;
-		} else if (!strncmp(my_chn[i].label, "current", 6))
+			/*trim the label to remove the */
+			strcpy(my_chn[i].label, "power");
+	
+		} else if (!strncmp(id, "current", 6)) {
 			my_chn[i].flags |= HAS_MIN;
+			
+                        /*trim the label to remove the */
+                        strcpy(my_chn[i].label, "current");
+
+                } else
+			strcpy(my_chn[i].label, "voltage");
 	}
 }
 
@@ -365,7 +383,7 @@ int main(int argc, char **argv)
 	if (c)
 		sampling_freq = atoi(temp);
 
-	init_channels(dev);
+	init_ina2xx_channels(dev);
 
 	if (argc == arg_index + 2) {
 		/* Enable all channels */

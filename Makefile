@@ -26,5 +26,8 @@ all: $(TARGETS)
 iio-capture: iio-capture.o
 	$(CC) -o $@ $^ $(LDFLAGS) -lpthread -liio
 
+install:
+	sudo install -s -v iio-capture /usr/bin
+
 clean:
 	rm -f $(TARGETS) $(TARGETS:%=%.o)

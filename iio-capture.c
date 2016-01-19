@@ -86,9 +86,9 @@ static void quit_all(int sig)
 	app_running = false;
 
 	for (i=0; i< nb_channels; i++)	{
-		printf("min[%d] = %f mSI\n", chn_min[i] * chn_scl[i]);
-		printf("max[%d] = %f mSI\n", chn_max[i] * chn_scl[i]);
-		printf("avg[%d] = %f mSI\n", chn_scl[i] * chn_scl[i]); 
+		printf("min[%d] = %5.2f mSI\n", i, chn_min[i] * chn_scl[i]);
+		printf("max[%d] = %5.2f mSI\n", i, chn_max[i] * chn_scl[i]);
+		printf("avg[%d] = %5.2f mSI\n", i, chn_scl[i] * chn_scl[i]); 
 	}
 }
 
@@ -132,7 +132,7 @@ static ssize_t print_sample(const struct iio_channel *chn,
 		void *buf, size_t len, void *d)
 {
 //	fwrite(buf, 1, len, stdout);
-	char *id;
+	const char *id;
 	int idx;
 	short val = *(short*)buf;
 	short vabs = 0;
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
 	unsigned int buffer_size = SAMPLES_PER_READ;
 	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
 	struct iio_device *dev;
-	size_t sample_size;
+//	size_t sample_size;
 
 	while ((c = getopt_long(argc, argv, "+hn:u:t:b:",
 					options, &option_index)) != -1) {
@@ -306,7 +306,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sample_size = iio_device_get_sample_size(dev);
+//	sample_size = iio_device_get_sample_size(dev);
 
 	buffer = iio_device_create_buffer(dev, buffer_size, false);
 	if (!buffer) {
@@ -357,7 +357,7 @@ int main(int argc, char **argv)
 //		}
 	}
 
-err_destroy_buffer:
+//err_destroy_buffer:
 	iio_buffer_destroy(buffer);
 	iio_context_destroy(ctx);
 	return exit_code;

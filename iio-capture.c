@@ -29,8 +29,9 @@
 
 #define MY_NAME "iio-capture"
 
-#define SAMPLES_PER_READ 256
-#define DEFAULT_FREQ_HZ  100
+#define SAMPLES_PER_READ 128
+#define OVER_SAMPLING 1
+#define DEFAULT_FREQ_HZ  455
 
 static long long sampling_freq;
 
@@ -101,8 +102,10 @@ static int exit_code = EXIT_SUCCESS;
 /* Create report compatible with JSON form */
 static void channel_report(int i)
 {
-	if (!my_chn[i].count)
+	if (my_chn[i].flags && !my_chn[i].count) {
+		printf("%s: no sample acquired, ", my_chn[i].label);
 		return;
+	}
 
 	if (my_chn[i].flags & HAS_MAX)
 		printf("\"%s_max\": \"%5.2f\", ", my_chn[i].label,
@@ -380,12 +383,22 @@ int main(int argc, char **argv)
 						       DEFAULT_FREQ_HZ);
 
 		iio_device_set_trigger(dev, trigger);
-	}
 
-	/* store actual sampling freq */
-	c = iio_device_attr_read(dev, "in_sampling_frequency", temp, 1024);
-	if (c)
-		sampling_freq = atoi(temp);
+	} else {
+	
+		sprintf(temp, "%d", OVER_SAMPLING);
+
+		c = iio_device_attr_write(dev, "in_oversampling_ratio", temp);
+		if (c < 0) {
+			fprintf(stderr, "Unsupported write attribute 'in_oversampling_ratio'");
+			exit(-1);
+		}
+
+		/* store actual sampling freq */
+		c = iio_device_attr_read(dev, "in_sampling_frequency", temp, 1024);
+		if (c)
+			sampling_freq = atoi(temp);
+	}
 
 	init_ina2xx_channels(dev);
 

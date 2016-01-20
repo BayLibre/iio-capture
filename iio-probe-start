@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ -f /tmp/data-probe-$1-pidfile ]
+	echo "iio probe $1 already running"
+	exit 2
+fi
+
+iio-capture -n lab-baylibre-acme.local iio:device$1 > /tmp/data-probe-$1 &
+
+echo $! > /tmp/data-probe-$1-pidfile

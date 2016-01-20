@@ -28,6 +28,7 @@ iio-capture: iio-capture.o
 
 install:
 	sudo install -s -v iio-capture /usr/bin
+	sudo install -v iio-probe* /usr/bin
 
 clean:
 	rm -f $(TARGETS) $(TARGETS:%=%.o)

@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [ -f /tmp/data-probe-$1-pidfile ]
-	echo "iio probe $1 already running"
+then
+	echo "iio probe $1 already running";
 	exit 2
 fi
 

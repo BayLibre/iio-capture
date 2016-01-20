@@ -101,22 +101,24 @@ static int exit_code = EXIT_SUCCESS;
 /* Create report compatible with JSON form */
 static void channel_report(int i)
 {
+	if (!my_chn[i].count)
+		return;
 
 	if (my_chn[i].flags & HAS_MAX)
-		printf("\t \"%s_max\":\t \"%5.2f\",\n", my_chn[i].label,
+		printf("\"%s_max\": \"%5.2f\", ", my_chn[i].label,
 		       my_chn[i].max * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_AVG)
-		printf("\t \"%s_avg\":\t \"%5.2f\",\n", my_chn[i].label,
+		printf("\"%s_avg\": \"%5.2f\", ", my_chn[i].label,
 		       my_chn[i].avg * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_MIN)
-		printf("\t \"%s_min\":\t \"%5.2f\",\n", my_chn[i].label,
+		printf("\"%s_min\": \"%5.2f\", ", my_chn[i].label,
 		       my_chn[i].min * my_chn[i].scale);
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
-		printf("\t \"energy\":\t \"%5.2f\",\n",
+		printf("\"energy\": \"%5.2f\", ",
 		       my_chn[i].energy / sampling_freq);
 }
 
@@ -182,8 +184,8 @@ static ssize_t print_sample(const struct iio_channel *chn,
 			    void *buf, size_t len, void *d)
 {
 //      fwrite(buf, 1, len, stdout);
-	short val = *(short *)buf;
-	short vabs = 0;
+	int val = (int)*(short *)buf;
+	int vabs = 0;
 	int i;
 
 	i = chan_index(chn);
@@ -266,6 +268,8 @@ static void init_ina2xx_channels(struct iio_device *dev)
 
                 } else
 			strcpy(my_chn[i].label, "voltage");
+
+		my_chn[i].count = 0;
 	}
 }
 

@@ -99,7 +99,7 @@ static const char *trigger_name = NULL;
 static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
 
-/* Create report compatible with JSON form */
+/* Create report compatible with lava-report.py form */
 static void channel_report(int i)
 {
 	if (my_chn[i].flags && !my_chn[i].count) {
@@ -108,20 +108,20 @@ static void channel_report(int i)
 	}
 
 	if (my_chn[i].flags & HAS_MAX)
-		printf("\"%s_max\": %5.2f, ", my_chn[i].label,
+		printf("%cmax=%5.2f ", my_chn[i].label[0],
 		       my_chn[i].max * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_AVG)
-		printf("\"%s_avg\": %5.2f, ", my_chn[i].label,
+		printf("%cavg=%5.2f ", my_chn[i].label[0],
 		       my_chn[i].avg * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_MIN)
-		printf("\"%s_min\": %5.2f, ", my_chn[i].label,
+		printf("%cmin=%5.2f ", my_chn[i].label[0],
 		       my_chn[i].min * my_chn[i].scale);
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
-		printf("\"energy\": %5.2f, ",
+		printf("energy=%5.2f ",
 		       my_chn[i].energy / sampling_freq);
 }
 

@@ -108,20 +108,20 @@ static void channel_report(int i)
 	}
 
 	if (my_chn[i].flags & HAS_MAX)
-		printf("\"%s_max\": \"%5.2f\", ", my_chn[i].label,
+		printf("\"%s_max\": %5.2f, ", my_chn[i].label,
 		       my_chn[i].max * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_AVG)
-		printf("\"%s_avg\": \"%5.2f\", ", my_chn[i].label,
+		printf("\"%s_avg\": %5.2f, ", my_chn[i].label,
 		       my_chn[i].avg * my_chn[i].scale);
 
 	if (my_chn[i].flags & HAS_MIN)
-		printf("\"%s_min\": \"%5.2f\", ", my_chn[i].label,
+		printf("\"%s_min\": %5.2f, ", my_chn[i].label,
 		       my_chn[i].min * my_chn[i].scale);
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
-		printf("\"energy\": \"%5.2f\", ",
+		printf("\"energy\": %5.2f, ",
 		       my_chn[i].energy / sampling_freq);
 }
 

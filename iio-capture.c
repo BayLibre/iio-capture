@@ -58,6 +58,8 @@ struct my_channel {
 	unsigned int flags;
 };
 
+static FILE *fout;
+
 static unsigned int nb_channels;
 static unsigned int nb_samples;
 static struct my_channel my_chn[MAX_CHANNELS];
@@ -67,6 +69,7 @@ static const struct option options[] = {
 	{"network", required_argument, 0, 'n'},
 	{"usb", required_argument, 0, 'u'},
 	{"trigger", required_argument, 0, 't'},
+	{"fout", required_argument, 0, 'f'},
 	{"buffer-size", required_argument, 0, 'b'},
 	{0, 0, 0, 0},
 };
@@ -84,7 +87,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-	       "[-t <trigger>] [-b <buffer-size>] "
+	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] "
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -121,8 +124,7 @@ static void channel_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
-		printf("energy=%5.2f ",
-		       my_chn[i].energy / sampling_freq);
+		printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
 }
 
 static void quit_all(int sig)
@@ -133,6 +135,9 @@ static void quit_all(int sig)
 
 	for (i = 0; i < nb_channels; i++)
 		channel_report(i);
+
+//      if (fout)
+//              fclose(fout);
 }
 
 static void set_handler(int signal_nb, void (*handler) (int))
@@ -186,7 +191,6 @@ static inline int chan_index(const struct iio_channel *chn)
 static ssize_t print_sample(const struct iio_channel *chn,
 			    void *buf, size_t len, void *d)
 {
-//      fwrite(buf, 1, len, stdout);
 	int val = (int)*(short *)buf;
 	int vabs = 0;
 	int i;
@@ -214,6 +218,9 @@ static ssize_t print_sample(const struct iio_channel *chn,
 
 	nb_samples++;
 
+	if (fout)
+		fwrite(buf, 1, len, fout);
+
 	return len;
 }
 
@@ -223,11 +230,12 @@ static void init_ina2xx_channels(struct iio_device *dev)
 	char buf[1024];
 	struct iio_channel *ch;
 
-	if (strcmp(iio_device_get_name(dev),"ina226")) {
-		fprintf(stderr, "Unknown device %s\n", iio_device_get_name(dev));
+	if (strcmp(iio_device_get_name(dev), "ina226")) {
+		fprintf(stderr, "Unknown device %s\n",
+			iio_device_get_name(dev));
 		exit(-1);
 	}
-		
+
 	nb_channels = iio_device_get_channels_count(dev);
 
 	nb_samples = 0;
@@ -236,7 +244,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 	assert(nb_samples <= MAX_CHANNELS);
 
 	for (i = 0; i < nb_channels; i++) {
-		const char* id;
+		const char *id;
 		ch = iio_device_get_channel(dev, i);
 
 		my_chn[i].min = 0xffff;
@@ -257,19 +265,19 @@ static void init_ina2xx_channels(struct iio_device *dev)
 		my_chn[i].flags = HAS_MAX;
 
 		if (!strncmp(id, "power", 5)) {
-			my_chn[i].flags |= HAS_MIN|HAS_AVG;
+			my_chn[i].flags |= HAS_MIN | HAS_AVG;
 			if (sampling_freq)
 				my_chn[i].flags |= HAS_NRJ;
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "power");
-	
+
 		} else if (!strncmp(id, "current", 6)) {
 			my_chn[i].flags |= HAS_MIN;
-			
-                        /*trim the label to remove the */
-                        strcpy(my_chn[i].label, "current");
 
-                } else
+			/*trim the label to remove the */
+			strcpy(my_chn[i].label, "current");
+
+		} else
 			strcpy(my_chn[i].label, "voltage");
 
 		my_chn[i].count = 0;
@@ -280,11 +288,12 @@ int main(int argc, char **argv)
 {
 	unsigned int i;
 	unsigned int buffer_size = SAMPLES_PER_READ;
-	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
+	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0,
+	    fout_index = 0;
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hn:u:t:b:",
+	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:",
 				options, &option_index)) != -1) {
 		switch (c) {
 		case 'h':
@@ -297,6 +306,10 @@ int main(int argc, char **argv)
 		case 'u':
 			arg_index += 2;
 			device_index = arg_index;
+			break;
+		case 'f':
+			arg_index += 2;
+			fout_index = arg_index;
 			break;
 		case 't':
 			arg_index += 2;
@@ -385,17 +398,19 @@ int main(int argc, char **argv)
 		iio_device_set_trigger(dev, trigger);
 
 	} else {
-	
+
 		sprintf(temp, "%d", OVER_SAMPLING);
 
 		c = iio_device_attr_write(dev, "in_oversampling_ratio", temp);
 		if (c < 0) {
-			fprintf(stderr, "Unsupported write attribute 'in_oversampling_ratio'");
+			fprintf(stderr,
+				"Unsupported write attribute 'in_oversampling_ratio'");
 			exit(-1);
 		}
 
 		/* store actual sampling freq */
-		c = iio_device_attr_read(dev, "in_sampling_frequency", temp, 1024);
+		c = iio_device_attr_read(dev, "in_sampling_frequency", temp,
+					 1024);
 		if (c)
 			sampling_freq = atoi(temp);
 	}
@@ -425,6 +440,9 @@ int main(int argc, char **argv)
 		iio_context_destroy(ctx);
 		return EXIT_FAILURE;
 	}
+
+	if (fout_index)
+		fout = fopen(argv[fout_index], "wb");
 
 	while (app_running) {
 		int ret = iio_buffer_refill(buffer);

@@ -6,6 +6,6 @@ then
 	exit 2
 fi
 
-iio-capture -n lab-baylibre-acme.local iio:device$1 > /tmp/data-probe-$1 &
+iio-capture -f $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/data-probe-$1 &
 
 echo $! > /tmp/data-probe-$1-pidfile

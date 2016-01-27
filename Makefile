@@ -26,7 +26,7 @@ all: $(TARGETS)
 iio-capture: iio-capture.o
 	$(CC) -o $@ $^ $(LDFLAGS) -lpthread -liio
 
-install:
+install: iio-capture
 	sudo install -s -v iio-capture /usr/bin
 	sudo install -v iio-probe* /usr/bin
 

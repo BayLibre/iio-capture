@@ -17,3 +17,8 @@ then
 	mv /tmp/data-probe-$1 /tmp/data-probe-$1_old
 	cat /tmp/data-probe-$1_old
 fi
+
+if [ -f /tmp/gnuplot-$1 ]
+then
+	gnuplot /tmp/gnuplot-$1
+fi

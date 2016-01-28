@@ -31,4 +31,5 @@ install: iio-capture
 	sudo install -v iio-probe* /usr/bin
 
 clean:
-	rm -f $(TARGETS) $(TARGETS:%=%.o)
+	rm -f $(TARGETS) *.o
+	rm -f ./*.mimetype ./*.dat ./*.png

@@ -22,3 +22,7 @@ if [ -f /tmp/gnuplot-$1 ]
 then
 	gnuplot /tmp/gnuplot-$1
 fi
+
+mkdir $2 
+cp $2-* $2
+rsync -r $2 powerci@powerci:/var/www/html/kernel-ci/attachments

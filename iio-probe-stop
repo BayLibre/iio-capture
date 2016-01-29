@@ -23,6 +23,10 @@ then
 	gnuplot /tmp/gnuplot-$1
 fi
 
-mkdir $2 
-cp $2-* $2
-rsync -r $2 powerci@powerci:/var/www/html/kernel-ci/attachments
+
+uuid=`echo $2 | cut -d "-" -f1` 
+
+mkdir $uuid
+cp $2 $uuid
+
+rsync -r $uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments

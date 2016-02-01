@@ -3,6 +3,10 @@
 # This is not safe re. race conditions,
 # but we assume the dispatcher to deal with serialization.
 #
+## ABI:
+#
+# arg1 : probe number
+# arg2 : filename for attached data contents
 
 if [ -f /tmp/pidfile-$1 ]
 then
@@ -23,10 +27,9 @@ then
 	gnuplot /tmp/gnuplot-$1
 fi
 
+uuid=`basename $2` 
 
-uuid=`echo $2 | cut -d "-" -f1` 
+mkdir /tmp/$uuid
+cp $2 /tmp/$uuid/data.csv
 
-mkdir $uuid
-cp $2 $uuid
-
-rsync -r $uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments
+rsync -r /tmp/$uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+## ABI:
+#
+# arg1 : probe number
+# arg2 : filename for attached data contents
+
 if [ -f /tmp/pidfile-$1 ]
 then
 	echo "WARNING iio probe $1 already running";

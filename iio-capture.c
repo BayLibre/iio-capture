@@ -68,7 +68,7 @@ static struct my_channel my_chn[MAX_CHANNELS];
 
 static const struct option options[] = {
 	{"help", no_argument, 0, 'h'},
-	{"cvs", no_argument, 0, 'c'},
+	{"csv", no_argument, 0, 'c'},
 	{"network", required_argument, 0, 'n'},
 	{"usb", required_argument, 0, 'u'},
 	{"trigger", required_argument, 0, 't'},
@@ -79,9 +79,11 @@ static const struct option options[] = {
 
 static const char *options_descriptions[] = {
 	"Show this help and quit.",
+	"Output values to a Comma-Separated-Values file.",
 	"Use the network backend with the provided hostname.",
 	"Use the USB backend with the device that matches the given VID/PID.",
 	"Use the specified trigger.",
+	"Output values to specified filename as binary or CSV when '-c'.",
 	"Size of the capture buffer. Default is 256.",
 };
 
@@ -116,7 +118,7 @@ static bool cvs_output = false;
 static void channel_report(int i)
 {
 	if (my_chn[i].flags && !my_chn[i].count) {
-		printf("%s: no sample acquired, ", my_chn[i].label);
+		printf("%s: WTF: no sample acquired?", my_chn[i].label);
 		return;
 	}
 
@@ -145,9 +147,6 @@ static void quit_all(int sig)
 
 	for (i = 0; i < nb_channels; i++)
 		channel_report(i);
-
-//      if (fout)
-//              fclose(fout);
 }
 
 static void set_handler(int signal_nb, void (*handler) (int))
@@ -190,11 +189,9 @@ static inline int chan_index(const struct iio_channel *chn)
 {
 	int i;
 
-	for (i = 0; i < nb_channels; i++) {
+	for (i = 0; i < nb_channels; i++)
 		if (my_chn[i].iio == chn)
 			return i;
-	}
-
 	return -1;
 }
 
@@ -317,7 +314,6 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			strcpy(my_chn[i].unit, "mV");
 
 		} else if (!strncmp(id, "voltage0", 8)) {
-			my_chn[i].flags = HAS_MAX;
 			strcpy(my_chn[i].label, "vshunt");
 			strcpy(my_chn[i].unit, "mV");
 

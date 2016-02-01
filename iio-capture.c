@@ -122,6 +122,10 @@ static void channel_report(int i)
 		return;
 	}
 
+	 /*only power channel is expected to have energy */
+        if (my_chn[i].flags & HAS_NRJ)
+                printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
+
 	if (my_chn[i].flags & HAS_MAX)
 		printf("%cmax=%5.2f ", my_chn[i].label[0],
 		       my_chn[i].max * my_chn[i].scale);
@@ -133,10 +137,6 @@ static void channel_report(int i)
 	if (my_chn[i].flags & HAS_MIN)
 		printf("%cmin=%5.2f ", my_chn[i].label[0],
 		       my_chn[i].min * my_chn[i].scale);
-
-	/*only power channel is expected to have energy */
-	if (my_chn[i].flags & HAS_NRJ)
-		printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
 }
 
 static void quit_all(int sig)
@@ -294,7 +294,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			my_chn[i].scale = 1.0;
 
 		if (!strncmp(id, "power", 5)) {
-			my_chn[i].flags |= HAS_MIN | HAS_AVG;
+			my_chn[i].flags = HAS_MIN|HAS_MAX|HAS_AVG;
 			if (sampling_freq)
 				my_chn[i].flags |= HAS_NRJ;
 			/*trim the label to remove the */
@@ -302,7 +302,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			strcpy(my_chn[i].unit, "mW");
 
 		} else if (!strncmp(id, "current", 6)) {
-			my_chn[i].flags |= HAS_MIN;
+			my_chn[i].flags = HAS_MAX|HAS_MIN;
 
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "current");

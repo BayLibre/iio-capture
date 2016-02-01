@@ -1,22 +1,26 @@
 #!/bin/bash
 
-if [ -f /tmp/data-probe-$1-pidfile ]
+if [ -f /tmp/pidfile-$1 ]
 then
 	echo "WARNING iio probe $1 already running";
-	cat  /tmp/data-probe-$1-pidfile | xargs kill -2
-	rm /tmp/data-probe-$1-pidfile
+	cat  /tmp/pidfile-$1 | xargs kill -9
+	sleep 2
+	sync
+	sudo rm -rf /tmp/pidfile-$1
 fi
 
-iio-capture -f $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/data-probe-$1 &
+iio-capture --csv --fout $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/stats-$1 &
 
-echo set term png > /tmp/gnuplot-$1 
-echo set output \""$2".png\" >> /tmp/gnuplot-$1
-echo "plot \""$2"\" binary format=\"%4int16%int64\" u 5:1 w l title \"vhsunt\", \\" >> /tmp/gnuplot-$1
-echo "\""$2"\" binary format=\"%4int16%int64\" u 5:2 w l title \"vbus\", \\" >> /tmp/gnuplot-$1
-echo "\""$2"\" binary format=\"%4int16%int64\" u 5:4 w l title \"current\", \\" >> /tmp/gnuplot-$1
-echo "\""$2"\" binary format=\"%4int16%int64\" u 5:3 w l title \"power\"" >> /tmp/gnuplot-$1
-echo "set term x11" >> /tmp/gnuplot-$1
+echo "text/csv" > $2.mimetype
 
-echo "image/png" > $2.png.mimetype
+## Trials with Gnuplot (remove the --csv option)
+#
+#echo set term png > /tmp/gnuplot-$1 
+#echo set output \""$2".png\" >> /tmp/gnuplot-$1
+#echo "plot \""$2"\" binary format=\"%4int16%int64\" u 5:1 w l title \"vhsunt\", \\" >> /tmp/gnuplot-$1
+#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:2 w l title \"vbus\", \\" >> /tmp/gnuplot-$1
+#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:4 w l title \"current\", \\" >> /tmp/gnuplot-$1
+#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:3 w l title \"power\"" >> /tmp/gnuplot-$1
+#echo "image/png" > $2.png.mimetype
 
-echo $! > /tmp/data-probe-$1-pidfile
+echo $! > /tmp/pidfile-$1

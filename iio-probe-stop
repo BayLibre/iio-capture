@@ -4,18 +4,18 @@
 # but we assume the dispatcher to deal with serialization.
 #
 
-if [ -f /tmp/data-probe-$1-pidfile ]
+if [ -f /tmp/pidfile-$1 ]
 then
-	pid=`cat /tmp/data-probe-$1-pidfile`
-	rm /tmp/data-probe-$1-pidfile
+	pid=`cat /tmp/pidfile-$1`
+	rm /tmp/pidfile-$1
 	kill -2 $pid && sleep 2
 fi
 
-if [ -f /tmp/data-probe-$1 ]
+if [ -f /tmp/stats-$1 ]
 then
 	sync
-	mv /tmp/data-probe-$1 /tmp/data-probe-$1_old
-	cat /tmp/data-probe-$1_old
+	mv /tmp/stats-$1 /tmp/stats-$1_old
+	cat /tmp/stats-$1_old
 fi
 
 if [ -f /tmp/gnuplot-$1 ]

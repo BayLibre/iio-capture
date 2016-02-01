@@ -32,4 +32,4 @@ install: iio-capture
 
 clean:
 	rm -f $(TARGETS) *.o
-	rm -f ./*.mimetype ./*.dat ./*.png
+	rm -f ./*.mimetype ./*.dat ./*.png *.csv

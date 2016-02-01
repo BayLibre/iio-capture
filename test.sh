@@ -1,15 +1,14 @@
+if [ -z "$1" ]
+then
+	echo "Please provide a file name"
+	exit 2
+fi
 
-
-
-#./iio-capture -n lab-baylibre-acme.local iio:device1
 
 set -x 
 
-./iio-probe-start 1 /tmp/qqaaabbbcccdddeee-0 &
+./iio-probe-start 1 /tmp/$1-0 &
 sleep 10
 
-./iio-probe-stop 1 /tmp/qqaaabbbcccdddeee-0
-
-
-
+./iio-probe-stop 1 /tmp/$1-0
 

@@ -42,7 +42,7 @@ static long long sampling_freq;
  */
 struct my_channel {
 	char label[128];
-	const char *unit;
+	char unit[128];
 	int min;
 	int max;
 	double scale;
@@ -56,6 +56,8 @@ struct my_channel {
 #define HAS_AVG 0x04
 #define HAS_MAX 0x08
 	unsigned int flags;
+
+	const struct iio_channel *iio;
 };
 
 static FILE *fout;
@@ -66,6 +68,7 @@ static struct my_channel my_chn[MAX_CHANNELS];
 
 static const struct option options[] = {
 	{"help", no_argument, 0, 'h'},
+	{"cvs", no_argument, 0, 'c'},
 	{"network", required_argument, 0, 'n'},
 	{"usb", required_argument, 0, 'u'},
 	{"trigger", required_argument, 0, 't'},
@@ -87,7 +90,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] "
+	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-c] "
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -99,8 +102,15 @@ static struct iio_context *ctx;
 struct iio_buffer *buffer;
 static const char *trigger_name = NULL;
 
+/* output file */
+static char *default_name = "output.cvs";
+static char file_name[256] = "\0";
+static char *file_attr = "wb";
+static char *text_attr = "wt";
+
 static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
+static bool cvs_output = false;
 
 /* Create report compatible with lava-report.py form */
 static void channel_report(int i)
@@ -178,14 +188,37 @@ static struct iio_device *get_device(const struct iio_context *ctx,
 
 static inline int chan_index(const struct iio_channel *chn)
 {
-	const char *id = iio_channel_get_id(chn);
+	int i;
 
-	int idx = id[strlen(id) - 1];
+	for (i = 0; i < nb_channels; i++) {
+		if (my_chn[i].iio == chn)
+			return i;
+	}
 
-	if ((idx > '9') || (idx < '0'))
-		return -1;
+	return -1;
+}
 
-	return idx - '0';
+static void write_cvs_header(int idx)
+{
+	fprintf(fout, "\"%s %s\"", my_chn[idx].label, my_chn[idx].unit);
+
+	if (idx == nb_channels - 1)
+		fprintf(fout, "\n");
+	else
+		fprintf(fout, ", ");
+}
+
+/* Beware: data-width are hardcoded for ina2xx, sry...
+ *FIXME: store scan_element data format. 
+ */
+static void write_cvs_sample(int idx, void *buf)
+{
+	if (idx == nb_channels - 1)	/*assuming this is timestamp */
+		fprintf(fout, "%llu\n", *(unsigned long long *)buf);
+	else {
+		double val = (double)(*(short *)buf) * my_chn[idx].scale;
+		fprintf(fout, "%.1f, ", val);
+	}
 }
 
 static ssize_t print_sample(const struct iio_channel *chn,
@@ -196,30 +229,34 @@ static ssize_t print_sample(const struct iio_channel *chn,
 	int i;
 
 	i = chan_index(chn);
-	if (i < 0)
-		return len;
+	if (i) {
 
-	vabs = abs(val);
+		vabs = abs(val);
 
-	if (abs(my_chn[i].min) > vabs)
-		my_chn[i].min = val;
+		if (abs(my_chn[i].min) > vabs)
+			my_chn[i].min = val;
 
-	if (abs(my_chn[i].max) < vabs)
-		my_chn[i].max = val;
+		if (abs(my_chn[i].max) < vabs)
+			my_chn[i].max = val;
 
-	my_chn[i].count++;
+		my_chn[i].count++;
 
-	if (my_chn[i].flags & HAS_AVG)
-		my_chn[i].avg +=
-		    ((double)(val) - my_chn[i].avg) / my_chn[i].count;
+		if (my_chn[i].flags & HAS_AVG)
+			my_chn[i].avg +=
+			    ((double)(val) - my_chn[i].avg) / my_chn[i].count;
 
-	if (my_chn[i].flags & HAS_NRJ)
-		my_chn[i].energy += (double)val;
+		if (my_chn[i].flags & HAS_NRJ)
+			my_chn[i].energy += (double)val;
+	} else
+		/* timestamp */
+		nb_samples++;
 
-	nb_samples++;
-
-	if (fout)
-		fwrite(buf, 1, len, fout);
+	if (fout) {
+		if (cvs_output)
+			write_cvs_sample(i, buf);
+		else
+			fwrite(buf, 1, len, fout);
+	}
 
 	return len;
 }
@@ -250,19 +287,14 @@ static void init_ina2xx_channels(struct iio_device *dev)
 		my_chn[i].min = 0xffff;
 		my_chn[i].max = 0;
 		my_chn[i].flags = 0;
+		my_chn[i].iio = ch;
 
 		id = iio_channel_get_id(ch);
-
-		/* skip timestamp, and vshunt, cheesy fashon */
-		if (!strcmp(id, "timestamp") || !strcmp(id, "voltage0"))
-			continue;
 
 		if (iio_channel_attr_read(ch, "scale", buf, sizeof(buf)) >= 0)
 			my_chn[i].scale = atof(buf);
 		else
 			my_chn[i].scale = 1.0;
-
-		my_chn[i].flags = HAS_MAX;
 
 		if (!strncmp(id, "power", 5)) {
 			my_chn[i].flags |= HAS_MIN | HAS_AVG;
@@ -270,15 +302,32 @@ static void init_ina2xx_channels(struct iio_device *dev)
 				my_chn[i].flags |= HAS_NRJ;
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "power");
+			strcpy(my_chn[i].unit, "mW");
 
 		} else if (!strncmp(id, "current", 6)) {
 			my_chn[i].flags |= HAS_MIN;
 
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "current");
+			strcpy(my_chn[i].unit, "mA");
 
-		} else
-			strcpy(my_chn[i].label, "voltage");
+		} else if (!strncmp(id, "voltage1", 8)) {
+			my_chn[i].flags = HAS_MAX;
+			strcpy(my_chn[i].label, "vbus");
+			strcpy(my_chn[i].unit, "mV");
+
+		} else if (!strncmp(id, "voltage0", 8)) {
+			my_chn[i].flags = HAS_MAX;
+			strcpy(my_chn[i].label, "vshunt");
+			strcpy(my_chn[i].unit, "mV");
+
+		} else if (!strncmp(id, "timestamp", 8)) {
+			strcpy(my_chn[i].label, "timestamp");
+			strcpy(my_chn[i].unit, "ns");
+		}
+
+		if (cvs_output && fout)
+			write_cvs_header(i);
 
 		my_chn[i].count = 0;
 	}
@@ -288,14 +337,17 @@ int main(int argc, char **argv)
 {
 	unsigned int i;
 	unsigned int buffer_size = SAMPLES_PER_READ;
-	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0,
-	    fout_index = 0;
+	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:",
+	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:c",
 				options, &option_index)) != -1) {
 		switch (c) {
+		case 'c':
+			cvs_output = true;
+			arg_index += 1;
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
@@ -309,7 +361,7 @@ int main(int argc, char **argv)
 			break;
 		case 'f':
 			arg_index += 2;
-			fout_index = arg_index;
+			strncpy(file_name, argv[arg_index], 256);
 			break;
 		case 't':
 			arg_index += 2;
@@ -415,6 +467,15 @@ int main(int argc, char **argv)
 			sampling_freq = atoi(temp);
 	}
 
+	if (cvs_output) {
+		if (!file_name[0])
+			strncpy(file_name, default_name, 256);
+		file_attr = text_attr;
+	}
+
+	if (file_name[0])
+		fout = fopen(file_name, file_attr);
+
 	init_ina2xx_channels(dev);
 
 	if (argc == arg_index + 2) {
@@ -440,9 +501,6 @@ int main(int argc, char **argv)
 		iio_context_destroy(ctx);
 		return EXIT_FAILURE;
 	}
-
-	if (fout_index)
-		fout = fopen(argv[fout_index], "wb");
 
 	while (app_running) {
 		int ret = iio_buffer_refill(buffer);

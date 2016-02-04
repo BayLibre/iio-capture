@@ -30,6 +30,10 @@ fi
 uuid=`basename $2` 
 
 mkdir /tmp/$uuid
+
+# put the time stamps as the first column for the plotting widget in powerci
+cat $2 | awk 'BEGIN {FS=OFS=","}{t=$1;$1=$5;$5=t;print}' > $2
+
 cp $2 /tmp/$uuid/data.csv
 
 rsync -r /tmp/$uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments

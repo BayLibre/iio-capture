@@ -18,17 +18,27 @@ Note: This is slightly hardcoded for the ACME board ATM.
 
 All units are milli-SI
 
-```
-powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ ./iio-capture -n lab-baylibre-acme.local iio:device1 & 
-[1] 10667
+## LAVA Test Case Signal Format ##
 
-powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ kill -2 10667 
-	 "voltage_max":	 5110.00,
-	 "power_max":	 2475.00,
-	 "power_avg":	 1981.45,
-	 "power_min":	 1925.00,
-	 "energy":	 533.95,
-	 "current_max":	 484.00,
-	 "current_min":	 378.00,
+By default, iio-capture will output the metrics as expected by LAVA:
+
+```
+powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -n lab-baylibre-acme.local iio:device1
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=vbus_max UNIT=mV MEASUREMENT=70.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=Energy UNIT=mJ MEASUREMENT=00.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=power_min UNIT=mW MEASUREMENT=00.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=power_max UNIT=mW MEASUREMENT=00.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=power_avg UNIT=mW MEASUREMENT=00.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=current_min UNIT=mA MEASUREMENT=00.00>
+<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=current_max UNIT=mA MEASUREMENT=-1.00>
+```
+
+## One-line output ##
+
+Alternatively, a short form of the output can be requested with option -o/--one-line
+
+```
+powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -o -n lab-baylibre-acme.local iio:device1
+vmax=70.00 energy= 0.00 pmax= 0.00 pavg= 0.00 pmin= 0.00 cmax= 1.00 cmin= 0.00
 ```
 

@@ -69,6 +69,7 @@ static struct my_channel my_chn[MAX_CHANNELS];
 static const struct option options[] = {
 	{"help", no_argument, 0, 'h'},
 	{"csv", no_argument, 0, 'c'},
+	{"one-line", no_argument, 0, 'o'},
 	{"network", required_argument, 0, 'n'},
 	{"usb", required_argument, 0, 'u'},
 	{"trigger", required_argument, 0, 't'},
@@ -80,6 +81,7 @@ static const struct option options[] = {
 static const char *options_descriptions[] = {
 	"Show this help and quit.",
 	"Output values to a Comma-Separated-Values file.",
+	"Oneline style output format, instead of LAVA format.",
 	"Use the network backend with the provided hostname.",
 	"Use the USB backend with the device that matches the given VID/PID.",
 	"Use the specified trigger.",
@@ -92,7 +94,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-c] "
+	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-c] [-o]"
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -113,6 +115,49 @@ static char *text_attr = "wt";
 static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
 static bool cvs_output = false;
+static bool one_line = false;
+
+/*LAVA TEST SIGNAL-STYLE OUTPUT FORMAT */
+static void channel_lava_report(int i)
+{
+	if (my_chn[i].flags && !my_chn[i].count) {
+		printf("%s: WTF: no sample acquired?", my_chn[i].label);
+		return;
+	}
+
+	if (!my_chn[i].flags)
+		return;
+
+	/*only power channel is expected to have energy */
+	if (my_chn[i].flags & HAS_NRJ) {
+		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=Energy ");
+		printf("UNIT=mJ ");
+		printf("MEASUREMENT=%05.2f>\n",
+		       my_chn[i].energy / sampling_freq);
+	}
+
+	if (my_chn[i].flags & HAS_MIN) {
+		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_min ",
+		       my_chn[i].label);
+		printf("UNIT=%s ", my_chn[i].unit);
+		printf("MEASUREMENT=%05.2f>\n", my_chn[i].min * my_chn[i].scale);
+	}
+
+	if (my_chn[i].flags & HAS_MAX) {
+		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_max ",
+		       my_chn[i].label);
+		printf("UNIT=%s ", my_chn[i].unit);
+		printf("MEASUREMENT=%05.2f>\n", my_chn[i].max * my_chn[i].scale);
+	}
+
+	if (my_chn[i].flags & HAS_AVG) {
+		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_avg ",
+		       my_chn[i].label);
+		printf("UNIT=%s ", my_chn[i].unit);
+		printf("MEASUREMENT=%05.2f>\n", my_chn[i].avg * my_chn[i].scale);
+	}
+
+}
 
 /* Create report compatible with lava-report.py form */
 static void channel_report(int i)
@@ -122,9 +167,9 @@ static void channel_report(int i)
 		return;
 	}
 
-	 /*only power channel is expected to have energy */
-        if (my_chn[i].flags & HAS_NRJ)
-                printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
+	/*only power channel is expected to have energy */
+	if (my_chn[i].flags & HAS_NRJ)
+		printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
 
 	if (my_chn[i].flags & HAS_MAX)
 		printf("%cmax=%5.2f ", my_chn[i].label[0],
@@ -146,7 +191,10 @@ static void quit_all(int sig)
 	app_running = false;
 
 	for (i = 0; i < nb_channels; i++)
-		channel_report(i);
+		if (one_line)
+			channel_report(i);
+		else
+			channel_lava_report(i);
 }
 
 static void set_handler(int signal_nb, void (*handler) (int))
@@ -218,8 +266,8 @@ static void write_cvs_sample(int idx, void *buf)
 	}
 }
 
-static ssize_t print_sample(const struct iio_channel *chn,
-			    void *buf, size_t len, void *d)
+static ssize_t
+print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 {
 	int val = (int)*(short *)buf;
 	int vabs = 0;
@@ -294,7 +342,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			my_chn[i].scale = 1.0;
 
 		if (!strncmp(id, "power", 5)) {
-			my_chn[i].flags = HAS_MIN|HAS_MAX|HAS_AVG;
+			my_chn[i].flags = HAS_MIN | HAS_MAX | HAS_AVG;
 			if (sampling_freq)
 				my_chn[i].flags |= HAS_NRJ;
 			/*trim the label to remove the */
@@ -302,7 +350,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			strcpy(my_chn[i].unit, "mW");
 
 		} else if (!strncmp(id, "current", 6)) {
-			my_chn[i].flags = HAS_MAX|HAS_MIN;
+			my_chn[i].flags = HAS_MAX | HAS_MIN;
 
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "current");
@@ -337,9 +385,13 @@ int main(int argc, char **argv)
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:c",
+	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:co",
 				options, &option_index)) != -1) {
 		switch (c) {
+		case 'o':
+			one_line = true;
+			arg_index += 1;
+			break;
 		case 'c':
 			cvs_output = true;
 			arg_index += 1;

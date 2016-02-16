@@ -130,30 +130,29 @@ static void channel_lava_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ) {
-		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=Energy ");
-		printf("UNIT=mJ ");
+		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=Energy RESULT=pass UNITS=mJ ");
 		printf("MEASUREMENT=%05.2f>\n",
 		       my_chn[i].energy / sampling_freq);
 	}
 
 	if (my_chn[i].flags & HAS_MIN) {
-		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_min ",
+		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_min RESULT=pass ",
 		       my_chn[i].label);
-		printf("UNIT=%s ", my_chn[i].unit);
+		printf("UNITS=%s ", my_chn[i].unit);
 		printf("MEASUREMENT=%05.2f>\n", my_chn[i].min * my_chn[i].scale);
 	}
 
 	if (my_chn[i].flags & HAS_MAX) {
-		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_max ",
+		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_max RESULT=pass ",
 		       my_chn[i].label);
-		printf("UNIT=%s ", my_chn[i].unit);
+		printf("UNITS=%s ", my_chn[i].unit);
 		printf("MEASUREMENT=%05.2f>\n", my_chn[i].max * my_chn[i].scale);
 	}
 
 	if (my_chn[i].flags & HAS_AVG) {
-		printf("<LAVA_TESTCASE_SIGNAL TEST_CASE_ID=%s_avg ",
+		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_avg RESULT=pass ",
 		       my_chn[i].label);
-		printf("UNIT=%s ", my_chn[i].unit);
+		printf("UNITS=%s ", my_chn[i].unit);
 		printf("MEASUREMENT=%05.2f>\n", my_chn[i].avg * my_chn[i].scale);
 	}
 

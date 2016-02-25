@@ -11,7 +11,7 @@ Note: This is slightly hardcoded for the ACME board ATM.
 
 # Usage #
 
-* call iio-capture with the IP address of the ACME board, and device ID matching the probe. 
+* call iio-capture with the IP address of the ACME board, and device ID matching the probe.
 * Send a TERM signal to stop recording.
 
 # Output #
@@ -41,4 +41,10 @@ Alternatively, a short form of the output can be requested with option -o/--one-
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -o -n lab-baylibre-acme.local iio:device1
 vmax=70.00 energy= 0.00 pmax= 0.00 pavg= 0.00 pmin= 0.00 cmax= 1.00 cmin= 0.00
 ```
+# Building #
+
+Please refer to https://wiki.analog.com/resources/tools-software/linux-software/libiio as for pre-requisites:
+
+* package and library installation in order to build libiio
+* building and installing libiio
 

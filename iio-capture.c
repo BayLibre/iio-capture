@@ -69,6 +69,7 @@ static struct my_channel my_chn[MAX_CHANNELS];
 static const struct option options[] = {
 	{"help", no_argument, 0, 'h'},
 	{"csv", no_argument, 0, 'c'},
+	{"energy-only", no_argument, 0, 'e'},
 	{"one-line", no_argument, 0, 'o'},
 	{"network", required_argument, 0, 'n'},
 	{"usb", required_argument, 0, 'u'},
@@ -94,7 +95,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
-	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-c] [-o]"
+	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-e] [-c] [-o]"
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -116,6 +117,7 @@ static bool app_running = true;
 static int exit_code = EXIT_SUCCESS;
 static bool cvs_output = false;
 static bool one_line = false;
+static bool energy_only = false;
 
 /*LAVA TEST SIGNAL-STYLE OUTPUT FORMAT */
 static void channel_lava_report(int i)
@@ -134,6 +136,8 @@ static void channel_lava_report(int i)
 		printf("MEASUREMENT=%05.2f>\n",
 		       my_chn[i].energy / sampling_freq);
 	}
+	if (energy_only)
+		return;
 
 	if (my_chn[i].flags & HAS_MIN) {
 		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_min RESULT=pass ",
@@ -169,6 +173,8 @@ static void channel_report(int i)
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
 		printf("energy=%5.2f ", my_chn[i].energy / sampling_freq);
+	if (energy_only)
+		return;
 
 	if (my_chn[i].flags & HAS_MAX)
 		printf("%cmax=%5.2f ", my_chn[i].label[0],
@@ -384,9 +390,13 @@ int main(int argc, char **argv)
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hn:u:t:f:b:co",
+	while ((c = getopt_long(argc, argv, "+hen:u:t:f:b:co",
 				options, &option_index)) != -1) {
 		switch (c) {
+		case 'e':
+			energy_only = true;
+			arg_index += 1;
+			break;
 		case 'o':
 			one_line = true;
 			arg_index += 1;

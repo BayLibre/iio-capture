@@ -41,6 +41,19 @@ Alternatively, a short form of the output can be requested with option -o/--one-
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -o -n lab-baylibre-acme.local iio:device1
 vmax=70.00 energy= 0.00 pmax= 0.00 pavg= 0.00 pmin= 0.00 cmax= 1.00 cmin= 0.00
 ```
+
+## Energy-Only LAVA or One-Line Output ##
+
+To reduce output, only energy can be printed as :
+
+```
+<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=Energy RESULT=pass UNITS=mJ MEASUREMENT=00.00>
+```
+or
+```
+energy= 0.00
+```
+
 # Building #
 
 Please refer to https://wiki.analog.com/resources/tools-software/linux-software/libiio as for pre-requisites:

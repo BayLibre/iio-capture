@@ -132,7 +132,7 @@ static void channel_lava_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ) {
-		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=Energy RESULT=pass UNITS=mJ ");
+		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=energy RESULT=pass UNITS=mJ ");
 		printf("MEASUREMENT=%05.2f>\n",
 		       my_chn[i].energy / sampling_freq);
 	}

@@ -263,10 +263,19 @@ static void write_cvs_header(int idx)
  */
 static void write_cvs_sample(int idx, void *buf)
 {
-	if (idx == nb_channels - 1)	/*assuming this is timestamp */
-		fprintf(fout, "%llu\n", *(unsigned long long *)buf);
+	static double orig_timestamp = 0.0;
+	double val;
+
+	if (idx == nb_channels - 1) {	/*assuming this is timestamp */
+		val = (double)(*(long long*)buf) * my_chn[idx].scale;
+		if (orig_timestamp == 0.0)
+		    orig_timestamp = val;
+
+		val -= orig_timestamp;
+		fprintf(fout, "%.1f\n", val);
+	}		
 	else {
-		double val = (double)(*(short *)buf) * my_chn[idx].scale;
+		val = (double)(*(short *)buf) * my_chn[idx].scale;
 		fprintf(fout, "%.1f, ", val);
 	}
 }
@@ -372,7 +381,9 @@ static void init_ina2xx_channels(struct iio_device *dev)
 
 		} else if (!strncmp(id, "timestamp", 8)) {
 			strcpy(my_chn[i].label, "timestamp");
-			strcpy(my_chn[i].unit, "ns");
+			strcpy(my_chn[i].unit, "ms");
+			/* ns to ms */
+			my_chn[i].scale = 1.0/1000000.0;
 		}
 
 		if (cvs_output && fout)

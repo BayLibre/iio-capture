@@ -7,7 +7,9 @@ based on iio-readdev (Paul Cerceuil)
 - compute energy for power channel
 - listen to sigaction SIGTERM to stop record
 
-Note: This is slightly hardcoded for the ACME board ATM.
+Note: This is slightly hardcoded for the [BayLibre ACME](http://baylibre.com/acme) board at the moment.
+
+This is focused on integration with LAVA for the PowerCI Power Monitoring Continuous Integration solution.
 
 # Usage #
 
@@ -36,7 +38,7 @@ powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -n lab-baylibre-acm
 <LAVA_SIGNAL_TESTCASE TEST_CASE_ID=current_max RESULT=pass UNITS=mA MEASUREMENT=693.00>
 ```
 
-### Example of LAVA measurement output in log
+### Example of LAVA measurement output in job log
 
 ```
 111.1  ============
@@ -57,16 +59,16 @@ powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -n lab-baylibre-acm
 111.16  current_max PASS 693.00 mA
 ```
 
-## One-line output ##
+### One-line ###
 
-Alternatively, a short form of the output can be requested with option -o/--one-line
+Alternatively, a short form of the output can be requested with option **'-o/--one-line'**
 
 ```
 powerci@lava-baylibre:~/POWERCI/SRC/iio-capture$ iio-capture -o -n lab-baylibre-acme.local iio:device1
-vmax=70.00 energy= 0.00 pmax= 0.00 pavg= 0.00 pmin= 0.00 cmax= 1.00 cmin= 0.00
+vmax=70.00 energy=0.00 pmax=0.00 pavg=0.00 pmin=0.00 cmax=1.00 cmin=0.00
 ```
 
-## Energy-Only output ##
+### Energy-only ###
 
 To reduce output, energy only can be printed with option **'-e, --energy-only'** as :
 
@@ -75,8 +77,15 @@ To reduce output, energy only can be printed with option **'-e, --energy-only'**
 ```
 or
 ```
-energy= 0.00
+energy=0.00
 ```
+
+## Recording to File ##
+
+Option **'-f, --fout'** will make iio-capture to record the streamed date into a file, by default binary.
+It's contents can be easily checked with 'od -x' in the case of the ina226 sensors used in BayLibre ACME RevB.
+
+Alternatively, a CSV file can be generated, by adding option **'-c, --csv'**
 
 # Building #
 
@@ -84,4 +93,45 @@ Please refer to https://wiki.analog.com/resources/tools-software/linux-software/
 
 * package and library installation in order to build libiio
 * building and installing libiio
+
+# LAVA / PowerCI flow integration #
+
+## LAVA Hooks ##
+
+iio-capture is currently called from the LAVA dispatcher upon entry of a **lava-command** dispatcher action using the
+script *iio-probe-start* in the git. The hooks are declared for each device under test (DUT) in the conf files as known by the LAVA dispatcher.
+
+e.g in panda-es_0.conf:
+
+```
+lava-dispatcher.local:~$ cat /etc/lava-dispatcher/devices/panda-es_0.conf
+device_type = panda-es
+hostname = panda-es_0
+connection_command = telnet localhost 2001
+
+host_hook_enter_command = iio-probe-start 1
+host_hook_exit_command = iio-probe-stop 1
+
+hard_reset_command = ssh -t root@lab-baylibre-acme.local dut-hard-reset 2 &
+power_off_cmd = ssh -t root@lab-baylibre-acme.local dut-switch-off 2 &
+bootloader_prompt = =>
+```
+
+### iio-probe-start ####
+
+This will take the following arguments: 
+
+* arg1 = probe number, zero-based
+* arg2 = file name for attached contents, infered from the analyzer-uuid meta in the LAVA job. 
+
+iio-capture invocation upon entry in *lava-command*:
+```
+iio-capture --csv --fout $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/stats-$1 &
+
+echo "text/csv" > $2.mimetype
+```
+
+### iio-probe-stop ###
+
+Once the dispatcher action is complete, a second _exit_ hook calls the script *iio-probe-stop*, this scrpt simply send SIGTERM to iio-capture to tell the end of the record session, and uploads the results to the PowerCI attachement folder.
 

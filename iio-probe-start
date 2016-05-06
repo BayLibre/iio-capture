@@ -14,6 +14,9 @@ then
 	sudo rm -rf /tmp/pidfile-$1
 fi
 
+dir=`dirname $2`
+mkdir -p $dir
+
 iio-capture --csv --fout $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/stats-$1 &
 
 echo "text/csv" > $2.mimetype

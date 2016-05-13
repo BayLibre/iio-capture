@@ -15,7 +15,7 @@ This is focused on integration with LAVA for the PowerCI Power Monitoring Contin
 
 * call iio-capture with the IP address of the ACME board, and device ID matching the probe.
 * Send a TERM signal to stop recording.
-* The user maybe ask for the date stream to be recorded as a binary of Coma Separated Value file.
+* The user may chose the data stream to be recorded as a binary or Coma Separated Value (CSV) file.
 
 # Output #
 

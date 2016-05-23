@@ -17,6 +17,8 @@ This is focused on integration with LAVA for the PowerCI Power Monitoring Contin
 * Send a TERM signal to stop recording.
 * The user may chose the data stream to be recorded as a binary or Coma Separated Value (CSV) file.
 
+**Warning**: the iio devices are numbered in the order of discovery, meaning that if the first used slot on the cape is marked "PROBE3", iio:device0 will matche PROBE3 etc...The markings on the Cape are one-based, whilst the iio:deviceX numbering is zero-based.
+
 # Output #
 
 All units are milli-SI, including Timestamps in milli-seconds.

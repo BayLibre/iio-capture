@@ -72,7 +72,6 @@ static const struct option options[] = {
 	{"energy-only", no_argument, 0, 'e'},
 	{"one-line", no_argument, 0, 'o'},
 	{"network", required_argument, 0, 'n'},
-	{"usb", required_argument, 0, 'u'},
 	{"trigger", required_argument, 0, 't'},
 	{"fout", required_argument, 0, 'f'},
 	{"buffer-size", required_argument, 0, 'b'},
@@ -84,7 +83,6 @@ static const char *options_descriptions[] = {
 	"Output values to a Comma-Separated-Values file.",
 	"Oneline style output format, instead of LAVA format.",
 	"Use the network backend with the provided hostname.",
-	"Use the USB backend with the device that matches the given VID/PID.",
 	"Use the specified trigger.",
 	"Output values to specified filename as binary or CSV when '-c'.",
 	"Size of the capture buffer. Default is 256.",
@@ -94,7 +92,7 @@ static void usage(void)
 {
 	unsigned int i;
 
-	printf("Usage:\n\t" MY_NAME " [-n <hostname>] [-u <vid>:<pid>] "
+	printf("Usage:\n\t" MY_NAME " [-n <hostname>] "
 	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-e] [-c] [-o]"
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
@@ -259,7 +257,7 @@ static void write_cvs_header(int idx)
 }
 
 /* Beware: data-width are hardcoded for ina2xx, sry...
- *FIXME: store scan_element data format. 
+ *FIXME: store scan_element data format.
  */
 static void write_cvs_sample(int idx, void *buf)
 {
@@ -273,7 +271,7 @@ static void write_cvs_sample(int idx, void *buf)
 
 		val -= orig_timestamp;
 		fprintf(fout, "%.1f\n", val);
-	}		
+	}
 	else {
 		val = (double)(*(short *)buf) * my_chn[idx].scale;
 		fprintf(fout, "%.1f, ", val);
@@ -397,11 +395,11 @@ int main(int argc, char **argv)
 {
 	unsigned int i;
 	unsigned int buffer_size = SAMPLES_PER_READ;
-	int c, option_index = 0, arg_index = 0, ip_index = 0, device_index = 0;
+	int c, option_index = 0, arg_index = 0, ip_index = 0;
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hen:u:t:f:b:co",
+	while ((c = getopt_long(argc, argv, "+hen:t:f:b:co",
 				options, &option_index)) != -1) {
 		switch (c) {
 		case 'e':
@@ -422,10 +420,6 @@ int main(int argc, char **argv)
 		case 'n':
 			arg_index += 2;
 			ip_index = arg_index;
-			break;
-		case 'u':
-			arg_index += 2;
-			device_index = arg_index;
 			break;
 		case 'f':
 			arg_index += 2;
@@ -452,25 +446,6 @@ int main(int argc, char **argv)
 
 	if (ip_index) {
 		ctx = iio_create_network_context(argv[ip_index]);
-	} else if (device_index) {
-		char *ptr = argv[device_index], *end;
-		long vid, pid;
-
-		vid = strtol(ptr, &end, 0);
-		if (ptr == end || *end != ':') {
-			fprintf(stderr, "Invalid VID/PID\n");
-			return EXIT_FAILURE;
-		}
-
-		ptr = end + 1;
-		pid = strtol(ptr, &end, 0);
-		if (ptr == end) {
-			fprintf(stderr, "Invalid VID/PID\n");
-			return EXIT_FAILURE;
-		}
-
-		ctx = iio_create_usb_context((unsigned short)vid,
-					     (unsigned short)pid);
 	} else {
 		ctx = iio_create_default_context();
 	}

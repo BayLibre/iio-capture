@@ -30,14 +30,15 @@
 #define MY_NAME "iio-capture"
 
 #define SAMPLES_PER_READ 128
-#define OVER_SAMPLING 1
+#define OVER_SAMPLING  1
 #define DEFAULT_FREQ_HZ  455
 
 static long long sampling_freq;
 static long long first_timestamp;
-static long long last_timestamp;
+static long long duration;
+static long long wanted_duration;
 
-#define MAX_CHANNELS 10
+#define MAX_CHANNELS 5
 
 /*
  * Trivial helper structure for a scan_element.
@@ -49,7 +50,7 @@ struct my_channel {
 	int max;
 	double scale;
 	double avg;		/* moving average */
-	double energy;		/* linear integration over time */
+	long long energy;	/* linear integration over time */
 	int frequency;		/* sampling freq of channel */
 
 #define HAS_NRJ	0x01
@@ -72,6 +73,7 @@ static struct my_channel my_chn[MAX_CHANNELS];
 static const struct option options[] = {
 	{"help", no_argument, 0, 'h'},
 	{"csv", no_argument, 0, 'c'},
+	{"duration", no_argument, 0, 'd'},
 	{"energy-only", no_argument, 0, 'e'},
 	{"one-line", no_argument, 0, 'o'},
 	{"network", required_argument, 0, 'n'},
@@ -84,6 +86,7 @@ static const struct option options[] = {
 static const char *options_descriptions[] = {
 	"Show this help and quit.",
 	"Output values to a Comma-Separated-Values file.",
+	"Duration in milli-seconds for the record (based on driver timestamps).",
 	"Oneline style output format, instead of LAVA format.",
 	"Use the network backend with the provided hostname.",
 	"Use the specified trigger.",
@@ -96,7 +99,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] "
-	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-e] [-c] [-o]"
+	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-d] [-e] [-c] [-o]"
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -130,7 +133,8 @@ static void channel_lava_report(int i)
 	if (my_chn[i].flags & HAS_NRJ) {
 		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=energy RESULT=pass UNITS=mJ ");
 		printf("MEASUREMENT=%05.2f>\n",
-		       my_chn[i].energy / sampling_freq);
+		       (double)my_chn[i].energy
+                       * my_chn[i].scale / (double)sampling_freq);
 	}
 	if (energy_only)
 		return;
@@ -165,10 +169,19 @@ static void channel_report(int i)
 		return;
 
 	/*only power channel is expected to have energy */
-	if (my_chn[i].flags & HAS_NRJ)
-		printf("energy=%05.2f ", my_chn[i].energy / sampling_freq);
+	if (my_chn[i].flags & HAS_NRJ) {
+		printf("energy=%05.2f ", (double)my_chn[i].energy
+					  * my_chn[i].scale / sampling_freq);
+	}
 	if (energy_only)
 		return;
+
+	/* duration in millisec. */
+	if (my_chn[i].flags & HAS_TIMESTAMP) {
+		printf("duration=%0.1f ", (double)duration * my_chn[i].scale);
+		printf("period=%0.1f ", (double)duration * my_chn[i].scale/nb_samples);
+		printf("nb_samples=%llu ", nb_samples);
+	}
 
 	if (my_chn[i].flags & HAS_MAX)
 		printf("%cmax=%05.2f ", my_chn[i].label[0],
@@ -272,12 +285,14 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 
 	i = chan_index(chn);
 
-	nb_samples++;
+	/*increment the sample count on the first channel*/
+	if (!i)
+		nb_samples++;
 
 	if (my_chn[i].flags & HAS_TIMESTAMP) {
-		last_timestamp = *(long long*)buf;
+		duration = *(long long*)buf - first_timestamp;
 		if (first_timestamp == 0LL)
-			first_timestamp = last_timestamp;
+			first_timestamp = duration;
 	} else {
 		vabs = abs(val);
 
@@ -292,7 +307,7 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 			    ((double)(val) - my_chn[i].avg) / nb_samples;
 
 		if (my_chn[i].flags & HAS_NRJ)
-			my_chn[i].energy += (double)vabs;
+			my_chn[i].energy += vabs;
 	}
 
 	if (fout) {
@@ -344,6 +359,8 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			my_chn[i].flags = HAS_MIN | HAS_MAX | HAS_AVG;
 			if (sampling_freq)
 				my_chn[i].flags |= HAS_NRJ;
+
+			my_chn[i].energy = 0;
 			/*trim the label to remove the */
 			strcpy(my_chn[i].label, "power");
 			strcpy(my_chn[i].unit, "mW");
@@ -385,7 +402,9 @@ int main(int argc, char **argv)
 	struct iio_device *dev;
 	char temp[1024];
 
-	while ((c = getopt_long(argc, argv, "+hen:t:f:b:co",
+	duration = first_timestamp = 0LL;
+
+	while ((c = getopt_long(argc, argv, "+hen:t:f:b:cod:",
 				options, &option_index)) != -1) {
 		switch (c) {
 		case 'e':
@@ -418,6 +437,12 @@ int main(int argc, char **argv)
 		case 'b':
 			arg_index += 2;
 			buffer_size = atoi(argv[arg_index]);
+			break;
+		case 'd':
+			arg_index += 2;
+			/*milli to nano*/
+			wanted_duration = atol(argv[arg_index]);
+			wanted_duration *= 1000000;
 			break;
 		case '?':
 			return EXIT_FAILURE;
@@ -539,6 +564,9 @@ int main(int argc, char **argv)
 			break;
 		}
 		iio_buffer_foreach_sample(buffer, print_sample, NULL);
+
+		if (duration >= wanted_duration)
+			quit_all(SIGTERM);
 	}
 
 	iio_buffer_destroy(buffer);

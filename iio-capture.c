@@ -30,8 +30,7 @@
 #define MY_NAME "iio-capture"
 
 #define SAMPLES_PER_READ 128
-#define OVER_SAMPLING  1
-#define DEFAULT_FREQ_HZ  455
+#define OVER_SAMPLING  4
 
 static long long sampling_freq;
 static long long first_timestamp;
@@ -77,7 +76,6 @@ static const struct option options[] = {
 	{"energy-only", no_argument, 0, 'e'},
 	{"one-line", no_argument, 0, 'o'},
 	{"network", required_argument, 0, 'n'},
-	{"trigger", required_argument, 0, 't'},
 	{"fout", required_argument, 0, 'f'},
 	{"buffer-size", required_argument, 0, 'b'},
 	{0, 0, 0, 0},
@@ -89,7 +87,6 @@ static const char *options_descriptions[] = {
 	"Duration in milli-seconds for the record (based on driver timestamps).",
 	"Oneline style output format, instead of LAVA format.",
 	"Use the network backend with the provided hostname.",
-	"Use the specified trigger.",
 	"Output values to specified filename as binary or CSV when '-c'.",
 	"Size of the capture buffer. Default is 256.",
 };
@@ -99,7 +96,7 @@ static void usage(void)
 	unsigned int i;
 
 	printf("Usage:\n\t" MY_NAME " [-n <hostname>] "
-	       "[-t <trigger>]  [-f <fout>] [-b <buffer-size>] [-d] [-e] [-c] [-o]"
+	       "[-f <fout>] [-b <buffer-size>] [-d] [-e] [-c] [-o]"
 	       "<iio_device> [<channel> ...]\n\nOptions:\n");
 	for (i = 0; options[i].name; i++)
 		printf("\t-%c, --%s\n\t\t\t%s\n",
@@ -109,7 +106,6 @@ static void usage(void)
 
 static struct iio_context *ctx;
 struct iio_buffer *buffer;
-static const char *trigger_name = NULL;
 
 /* output file */
 static char *default_name = "output.cvs";
@@ -170,18 +166,21 @@ static void channel_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ) {
-		printf("energy=%05.2f ", (double)my_chn[i].energy
-					  * my_chn[i].scale / sampling_freq);
+		printf("energy=%05.2f ", (double)(my_chn[i].energy) * my_chn[i].scale
+			  / (double)sampling_freq);
 	}
 	if (energy_only)
 		return;
 
+#if 0
 	/* duration in millisec. */
 	if (my_chn[i].flags & HAS_TIMESTAMP) {
 		printf("duration=%0.1f ", (double)duration * my_chn[i].scale);
 		printf("period=%0.1f ", (double)duration * my_chn[i].scale/nb_samples);
 		printf("nb_samples=%llu ", nb_samples);
+		printf("sampling_freq=%f ", (double)nb_samples*1000000000/(double)duration);
 	}
+#endif
 
 	if (my_chn[i].flags & HAS_MAX)
 		printf("%cmax=%05.2f ", my_chn[i].label[0],
@@ -404,7 +403,7 @@ int main(int argc, char **argv)
 
 	duration = first_timestamp = 0LL;
 
-	while ((c = getopt_long(argc, argv, "+hen:t:f:b:cod:",
+	while ((c = getopt_long(argc, argv, "+hen:f:b:cod:",
 				options, &option_index)) != -1) {
 		switch (c) {
 		case 'e':
@@ -429,10 +428,6 @@ int main(int argc, char **argv)
 		case 'f':
 			arg_index += 2;
 			strncpy(file_name, argv[arg_index], 256);
-			break;
-		case 't':
-			arg_index += 2;
-			trigger_name = argv[arg_index];
 			break;
 		case 'b':
 			arg_index += 2;
@@ -478,48 +473,20 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	if (trigger_name) {
-		struct iio_device *trigger = get_device(ctx, trigger_name);
-		if (!trigger) {
-			iio_context_destroy(ctx);
-			return EXIT_FAILURE;
-		}
+	sprintf(temp, "%d", OVER_SAMPLING);
 
-		if (!iio_device_is_trigger(trigger)) {
-			fprintf(stderr, "Specified device is not a trigger\n");
-			iio_context_destroy(ctx);
-			return EXIT_FAILURE;
-		}
-
-		/*
-		 * Fixed rate for now. Try new ABI first,
-		 * fail gracefully to remain compatible.
-		 */
-		if (iio_device_attr_write_longlong(trigger,
-						   "sampling_frequency",
-						   DEFAULT_FREQ_HZ) < 0)
-			iio_device_attr_write_longlong(trigger, "frequency",
-						       DEFAULT_FREQ_HZ);
-
-		iio_device_set_trigger(dev, trigger);
-
-	} else {
-
-		sprintf(temp, "%d", OVER_SAMPLING);
-
-		c = iio_device_attr_write(dev, "in_oversampling_ratio", temp);
-		if (c < 0) {
-			fprintf(stderr,
-				"Unsupported write attribute 'in_oversampling_ratio'\n");
-			exit(-1);
-		}
-
-		/* store actual sampling freq */
-		c = iio_device_attr_read(dev, "in_sampling_frequency", temp,
-					 1024);
-		if (c)
-			sampling_freq = atoi(temp);
+	c = iio_device_attr_write(dev, "in_oversampling_ratio", temp);
+	if (c < 0) {
+		fprintf(stderr,
+			"Unsupported write attribute 'in_oversampling_ratio'\n");
+		exit(-1);
 	}
+
+	/* store actual sampling freq */
+	c = iio_device_attr_read(dev, "in_sampling_frequency", temp,
+				 1024);
+	if (c)
+		sampling_freq = atoi(temp);
 
 	if (cvs_output) {
 		if (!file_name[0])

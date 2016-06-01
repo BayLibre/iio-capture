@@ -63,7 +63,6 @@ struct my_channel {
 static FILE *fout;
 
 static unsigned int nb_channels;
-static unsigned int nb_samples;
 static struct my_channel my_chn[MAX_CHANNELS];
 
 static const struct option options[] = {
@@ -286,7 +285,10 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 	int i;
 
 	i = chan_index(chn);
-	if (i) {
+
+	assert (i > -1);
+
+	if (i != (nb_channels - 1)) {
 
 		vabs = abs(val);
 
@@ -304,9 +306,7 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 
 		if (my_chn[i].flags & HAS_NRJ)
 			my_chn[i].energy += (double)val;
-	} else
-		/* timestamp */
-		nb_samples++;
+	}
 
 	if (fout) {
 		if (cvs_output)
@@ -332,10 +332,8 @@ static void init_ina2xx_channels(struct iio_device *dev)
 
 	nb_channels = iio_device_get_channels_count(dev);
 
-	nb_samples = 0;
-
 	/* FIXME: dyn alloc */
-	assert(nb_samples <= MAX_CHANNELS);
+	assert(nb_channels <= MAX_CHANNELS);
 
 	for (i = 0; i < nb_channels; i++) {
 		const char *id;
@@ -499,7 +497,7 @@ int main(int argc, char **argv)
 		c = iio_device_attr_write(dev, "in_oversampling_ratio", temp);
 		if (c < 0) {
 			fprintf(stderr,
-				"Unsupported write attribute 'in_oversampling_ratio'");
+				"Unsupported write attribute 'in_oversampling_ratio'\n");
 			exit(-1);
 		}
 

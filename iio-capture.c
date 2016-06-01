@@ -34,6 +34,8 @@
 #define DEFAULT_FREQ_HZ  455
 
 static long long sampling_freq;
+static long long first_timestamp;
+static long long last_timestamp;
 
 #define MAX_CHANNELS 10
 
@@ -49,12 +51,13 @@ struct my_channel {
 	double avg;		/* moving average */
 	double energy;		/* linear integration over time */
 	int frequency;		/* sampling freq of channel */
-	long long count;	/* sample count */
 
 #define HAS_NRJ	0x01
 #define HAS_MIN 0x02
 #define HAS_AVG 0x04
 #define HAS_MAX 0x08
+#define HAS_TIMESTAMP 0x10
+
 	unsigned int flags;
 
 	const struct iio_channel *iio;
@@ -63,6 +66,7 @@ struct my_channel {
 static FILE *fout;
 
 static unsigned int nb_channels;
+static long long nb_samples;
 static struct my_channel my_chn[MAX_CHANNELS];
 
 static const struct option options[] = {
@@ -119,12 +123,7 @@ static bool energy_only = false;
 /*LAVA TEST SIGNAL-STYLE OUTPUT FORMAT */
 static void channel_lava_report(int i)
 {
-	if (my_chn[i].flags && !my_chn[i].count) {
-		printf("%s: WTF: no sample acquired?", my_chn[i].label);
-		return;
-	}
-
-	if (!my_chn[i].flags)
+	if (!my_chn[i].flags || !nb_samples)
 		return;
 
 	/*only power channel is expected to have energy */
@@ -162,10 +161,8 @@ static void channel_lava_report(int i)
 /* Create report compatible with lava-report.py form */
 static void channel_report(int i)
 {
-	if (my_chn[i].flags && !my_chn[i].count) {
-		printf("%s: WTF: no sample acquired?", my_chn[i].label);
+	if (!my_chn[i].flags || !nb_samples)
 		return;
-	}
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ)
@@ -201,14 +198,10 @@ static void quit_all(int sig)
 
 static void set_handler(int signal_nb, void (*handler) (int))
 {
-#ifdef _WIN32
-	signal(signal_nb, handler);
-#else
 	struct sigaction sig;
 	sigaction(signal_nb, NULL, &sig);
 	sig.sa_handler = handler;
 	sigaction(signal_nb, &sig, NULL);
-#endif
 }
 
 static struct iio_device *get_device(const struct iio_context *ctx,
@@ -260,19 +253,12 @@ static void write_cvs_header(int idx)
  */
 static void write_cvs_sample(int idx, void *buf)
 {
-	static double orig_timestamp = 0.0;
-	double val;
-
 	if (idx == nb_channels - 1) {	/*assuming this is timestamp */
-		val = (double)(*(long long*)buf) * my_chn[idx].scale;
-		if (orig_timestamp == 0.0)
-		    orig_timestamp = val;
-
-		val -= orig_timestamp;
-		fprintf(fout, "%.1f\n", val);
+		long long val = *(long long*)buf - first_timestamp;
+		fprintf(fout, "%.1f\n", (double)val * my_chn[idx].scale);
 	}
 	else {
-		val = (double)(*(short *)buf) * my_chn[idx].scale;
+		double val = (double)(*(short *)buf) * my_chn[idx].scale;
 		fprintf(fout, "%.1f, ", val);
 	}
 }
@@ -286,10 +272,13 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 
 	i = chan_index(chn);
 
-	assert (i > -1);
+	nb_samples++;
 
-	if (i != (nb_channels - 1)) {
-
+	if (my_chn[i].flags & HAS_TIMESTAMP) {
+		last_timestamp = *(long long*)buf;
+		if (first_timestamp == 0LL)
+			first_timestamp = last_timestamp;
+	} else {
 		vabs = abs(val);
 
 		if (abs(my_chn[i].min) > vabs)
@@ -298,14 +287,12 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 		if (abs(my_chn[i].max) < vabs)
 			my_chn[i].max = val;
 
-		my_chn[i].count++;
-
 		if (my_chn[i].flags & HAS_AVG)
 			my_chn[i].avg +=
-			    ((double)(val) - my_chn[i].avg) / my_chn[i].count;
+			    ((double)(val) - my_chn[i].avg) / nb_samples;
 
 		if (my_chn[i].flags & HAS_NRJ)
-			my_chn[i].energy += (double)val;
+			my_chn[i].energy += (double)vabs;
 	}
 
 	if (fout) {
@@ -329,6 +316,8 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			iio_device_get_name(dev));
 		exit(-1);
 	}
+
+	nb_samples = 0;
 
 	nb_channels = iio_device_get_channels_count(dev);
 
@@ -380,12 +369,11 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			strcpy(my_chn[i].unit, "ms");
 			/* ns to ms */
 			my_chn[i].scale = 1.0/1000000.0;
+			my_chn[i].flags = HAS_TIMESTAMP;
 		}
 
 		if (cvs_output && fout)
 			write_cvs_header(i);
-
-		my_chn[i].count = 0;
 	}
 }
 

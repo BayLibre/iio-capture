@@ -35,7 +35,7 @@
 static long long sampling_freq;
 static long long first_timestamp;
 static long long duration;
-static long long wanted_duration;
+static long long wanted_duration = -1LL;
 
 #define MAX_CHANNELS 5
 
@@ -532,7 +532,7 @@ int main(int argc, char **argv)
 		}
 		iio_buffer_foreach_sample(buffer, print_sample, NULL);
 
-		if (duration >= wanted_duration)
+		if ((wanted_duration > 0) && (duration >= wanted_duration))
 			quit_all(SIGTERM);
 	}
 

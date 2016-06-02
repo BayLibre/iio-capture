@@ -127,10 +127,11 @@ static void channel_lava_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ) {
-		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=energy RESULT=pass UNITS=mJ ");
+		printf
+		    ("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=energy RESULT=pass UNITS=mJ ");
 		printf("MEASUREMENT=%05.2f>\n",
-		       (double)my_chn[i].energy
-                       * my_chn[i].scale / (double)sampling_freq);
+		       (double)my_chn[i].energy * my_chn[i].scale /
+		       (double)sampling_freq);
 	}
 	if (energy_only)
 		return;
@@ -139,21 +140,24 @@ static void channel_lava_report(int i)
 		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_min RESULT=pass ",
 		       my_chn[i].label);
 		printf("UNITS=%s ", my_chn[i].unit);
-		printf("MEASUREMENT=%05.2f>\n", my_chn[i].min * my_chn[i].scale);
+		printf("MEASUREMENT=%05.2f>\n",
+		       my_chn[i].min * my_chn[i].scale);
 	}
 
 	if (my_chn[i].flags & HAS_MAX) {
 		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_max RESULT=pass ",
 		       my_chn[i].label);
 		printf("UNITS=%s ", my_chn[i].unit);
-		printf("MEASUREMENT=%05.2f>\n", my_chn[i].max * my_chn[i].scale);
+		printf("MEASUREMENT=%05.2f>\n",
+		       my_chn[i].max * my_chn[i].scale);
 	}
 
 	if (my_chn[i].flags & HAS_AVG) {
 		printf("<LAVA_SIGNAL_TESTCASE TEST_CASE_ID=%s_avg RESULT=pass ",
 		       my_chn[i].label);
 		printf("UNITS=%s ", my_chn[i].unit);
-		printf("MEASUREMENT=%05.2f>\n", my_chn[i].avg * my_chn[i].scale);
+		printf("MEASUREMENT=%05.2f>\n",
+		       my_chn[i].avg * my_chn[i].scale);
 	}
 
 }
@@ -166,8 +170,9 @@ static void channel_report(int i)
 
 	/*only power channel is expected to have energy */
 	if (my_chn[i].flags & HAS_NRJ) {
-		printf("energy=%05.2f ", (double)(my_chn[i].energy) * my_chn[i].scale
-			  / (double)sampling_freq);
+		printf("energy=%05.2f ",
+		       (double)(my_chn[i].energy) * my_chn[i].scale /
+		       (double)sampling_freq);
 	}
 	if (energy_only)
 		return;
@@ -176,9 +181,11 @@ static void channel_report(int i)
 	/* duration in millisec. */
 	if (my_chn[i].flags & HAS_TIMESTAMP) {
 		printf("duration=%0.1f ", (double)duration * my_chn[i].scale);
-		printf("period=%0.1f ", (double)duration * my_chn[i].scale/nb_samples);
+		printf("period=%0.1f ",
+		       (double)duration * my_chn[i].scale / nb_samples);
 		printf("nb_samples=%llu ", nb_samples);
-		printf("sampling_freq=%f ", (double)nb_samples*1000000000/(double)duration);
+		printf("sampling_freq=%f ",
+		       (double)nb_samples * 1000000000 / (double)duration);
 	}
 #endif
 
@@ -266,10 +273,9 @@ static void write_cvs_header(int idx)
 static void write_cvs_sample(int idx, void *buf)
 {
 	if (idx == nb_channels - 1) {	/*assuming this is timestamp */
-		long long val = *(long long*)buf - first_timestamp;
+		long long val = *(long long *)buf - first_timestamp;
 		fprintf(fout, "%.1f\n", (double)val * my_chn[idx].scale);
-	}
-	else {
+	} else {
 		double val = (double)(*(short *)buf) * my_chn[idx].scale;
 		fprintf(fout, "%.1f, ", val);
 	}
@@ -284,12 +290,12 @@ print_sample(const struct iio_channel *chn, void *buf, size_t len, void *d)
 
 	i = chan_index(chn);
 
-	/*increment the sample count on the first channel*/
+	/*increment the sample count on the first channel */
 	if (!i)
 		nb_samples++;
 
 	if (my_chn[i].flags & HAS_TIMESTAMP) {
-		duration = *(long long*)buf - first_timestamp;
+		duration = *(long long *)buf - first_timestamp;
 		if (first_timestamp == 0LL)
 			first_timestamp = duration;
 	} else {
@@ -384,7 +390,7 @@ static void init_ina2xx_channels(struct iio_device *dev)
 			strcpy(my_chn[i].label, "timestamp");
 			strcpy(my_chn[i].unit, "ms");
 			/* ns to ms */
-			my_chn[i].scale = 1.0/1000000.0;
+			my_chn[i].scale = 1.0 / 1000000.0;
 			my_chn[i].flags = HAS_TIMESTAMP;
 		}
 
@@ -435,7 +441,7 @@ int main(int argc, char **argv)
 			break;
 		case 'd':
 			arg_index += 2;
-			/*milli to nano*/
+			/*milli to nano */
 			wanted_duration = atol(argv[arg_index]);
 			wanted_duration *= 1000000;
 			break;
@@ -483,8 +489,7 @@ int main(int argc, char **argv)
 	}
 
 	/* store actual sampling freq */
-	c = iio_device_attr_read(dev, "in_sampling_frequency", temp,
-				 1024);
+	c = iio_device_attr_read(dev, "in_sampling_frequency", temp, 1024);
 	if (c)
 		sampling_freq = atoi(temp);
 

@@ -85,6 +85,7 @@ static const char *options_descriptions[] = {
 	"Show this help and quit.",
 	"Output values to a Comma-Separated-Values file.",
 	"Duration in milli-seconds for the record (based on driver timestamps).",
+	"Output the energy value only.",
 	"Oneline style output format, instead of LAVA format.",
 	"Use the network backend with the provided hostname.",
 	"Output values to specified filename as binary or CSV when '-c'.",

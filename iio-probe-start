@@ -1,34 +1,39 @@
 #!/bin/bash
-
+set -x
 ## ABI:
 #
-# arg1 : probe number
-# arg2 : filename for attached data contents
+# arg1 : acme address
+# arg2 : probe number
+# arg3 : filename for attached data contents
 
-if [ -f /tmp/pidfile-$1 ]
+IN_ADDR=$1
+IN_PROBE=$2
+IN_FILENAME=$3
+
+if [ -f /tmp/pidfile-${IN_PROBE} ]
 then
-	echo "WARNING iio probe $1 already running";
-	cat  /tmp/pidfile-$1 | xargs kill -9
+	echo "WARNING iio probe ${IN_PROBE} already running";
+	cat  /tmp/pidfile-${IN_PROBE} | xargs kill -9
 	sleep 2
 	sync
-	sudo rm -rf /tmp/pidfile-$1
+	sudo rm -rf /tmp/pidfile-${IN_PROBE}
 fi
 
-dir=`dirname $2`
+dir=`dirname ${IN_FILENAME}`
 mkdir -p $dir
 
-iio-capture --csv --fout $2 -n lab-baylibre-acme.local iio:device$1 > /tmp/stats-$1 &
+iio-capture --csv --fout ${IN_FILENAME} -n ${IN_ADDR} iio:device${IN_PROBE} > /tmp/stats-${IN_PROBE} &
 
-echo "text/csv" > $2.mimetype
+echo "text/csv" > ${IN_FILENAME}.mimetype
 
 ## Trials with Gnuplot (remove the --csv option)
 #
-#echo set term png > /tmp/gnuplot-$1 
-#echo set output \""$2".png\" >> /tmp/gnuplot-$1
-#echo "plot \""$2"\" binary format=\"%4int16%int64\" u 5:1 w l title \"vhsunt\", \\" >> /tmp/gnuplot-$1
-#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:2 w l title \"vbus\", \\" >> /tmp/gnuplot-$1
-#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:4 w l title \"current\", \\" >> /tmp/gnuplot-$1
-#echo "\""$2"\" binary format=\"%4int16%int64\" u 5:3 w l title \"power\"" >> /tmp/gnuplot-$1
-#echo "image/png" > $2.png.mimetype
+#echo set term png > /tmp/gnuplot-$2 
+#echo set output \""$3".png\" >> /tmp/gnuplot-$3
+#echo "plot \""$3"\" binary format=\"%4int16%int64\" u 5:1 w l title \"vhsunt\", \\" >> /tmp/gnuplot-$2
+#echo "\""$3"\" binary format=\"%4int16%int64\" u 5:2 w l title \"vbus\", \\" >> /tmp/gnuplot-$2
+#echo "\""$3"\" binary format=\"%4int16%int64\" u 5:4 w l title \"current\", \\" >> /tmp/gnuplot-$2
+#echo "\""$3"\" binary format=\"%4int16%int64\" u 5:3 w l title \"power\"" >> /tmp/gnuplot-$2
+#echo "image/png" > $3.png.mimetype
 
-echo $! > /tmp/pidfile-$1
+echo $! > /tmp/pidfile-${IN_PROBE}

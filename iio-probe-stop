@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 #
 # This is not safe re. race conditions,
 # but we assume the dispatcher to deal with serialization.

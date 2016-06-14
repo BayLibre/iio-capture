@@ -111,7 +111,7 @@ device_type = panda-es
 hostname = panda-es_0
 connection_command = telnet localhost 2001
 
-host_hook_enter_command = iio-probe-start 1
+host_hook_enter_command = iio-probe-start lab-baylibre-acme.local 1
 host_hook_exit_command = iio-probe-stop 1
 
 hard_reset_command = ssh -t root@lab-baylibre-acme.local dut-hard-reset 2 &

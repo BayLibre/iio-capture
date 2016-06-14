@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+#set -x
 #
 # This is not safe re. race conditions,
 # but we assume the dispatcher to deal with serialization.
@@ -9,30 +9,58 @@ set -x
 # arg1 : probe number
 # arg2 : filename for attached data contents
 
-if [ -f /tmp/pidfile-$1 ]
+TEST="false"
+
+OPTS=$( getopt -o t -l test -- "$@" )
+eval set -- "$OPTS"
+ 
+while true ; do
+    case "$1" in
+        -t | --test)
+            TEST="true"
+            shift;;
+        --) shift; break;;
+        *)
+            echo "Unknown option"
+            exit 1;;
+    esac
+done
+
+
+IN_PROBE=$1
+IN_FILENAME=$2
+
+REMOTE_ADDR="powerci@powerci.org"
+REMOTE_DIR="/var/www/html/kernel-ci/attachments"
+
+
+if [ -f /tmp/pidfile-${IN_PROBE} ]
 then
-	pid=`cat /tmp/pidfile-$1`
-	rm /tmp/pidfile-$1
+	pid=`cat /tmp/pidfile-${IN_PROBE}`
+	rm /tmp/pidfile-${IN_PROBE}
 	kill -2 $pid && sleep 2
 fi
 
-if [ -f /tmp/stats-$1 ]
+if [ -f /tmp/stats-${IN_PROBE} ]
 then
 	sync
-	mv /tmp/stats-$1 /tmp/stats-$1_old
-	cat /tmp/stats-$1_old
+	mv /tmp/stats-${IN_PROBE} /tmp/stats-${IN_PROBE}_old
+	cat /tmp/stats-${IN_PROBE}_old
 fi
 
-if [ -f /tmp/gnuplot-$1 ]
+if [ -f /tmp/gnuplot-${IN_PROBE} ]
 then
-	gnuplot /tmp/gnuplot-$1
+	gnuplot /tmp/gnuplot-${IN_PROBE}
 fi
 
-uuid=`basename $2` 
+uuid=`basename ${IN_FILENAME}` 
 
 mkdir /tmp/$uuid
 
 # put the time stamps as the first column for the plotting widget in powerci
 cat $2 | awk 'BEGIN {FS=OFS=","}{t=$1;$1=$5;$5=t;print}' > /tmp/$uuid/data.csv
 
-rsync -r /tmp/$uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments
+if [ "${TEST}" == "false" ]; then
+    #rsync -r /tmp/$uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments
+    rsync -r /tmp/$uuid ${REMOTE_ADDR}:${REMOTE_DIR}
+fi

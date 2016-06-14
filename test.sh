@@ -1,18 +1,27 @@
+#!/bin/bash
+set -x
 
-if [ -z "$1" ];then
+IN_ADDR=$1
+IN_PROBE=$2
+
+FILENAME="test/test"
+
+if [ -z "${IN_ADDR}" ];then
 	echo "Please provide an acme adress"
 	exit 2
 fi
-if [ -z "$2" ];then
-	echo "Please provide a file name"
+if [ -z "${IN_PROBE}" ];then
+	echo "Please provide a probe number"
 	exit 2
 fi
+ 
+if [ -f /tmp/${FILENAME} ]; then
+    rm -rf `dirname ${FILENAME}`
+fi
 
+./iio-probe-start ${IN_ADDR} ${IN_PROBE} /tmp/${FILENAME} &
 
-set -x 
-
-./iio-probe-start $1 1 /tmp/$2-0 &
 sleep 10
 
-./iio-probe-stop 1 /tmp/$2-0
+./iio-probe-stop --test ${IN_PROBE} /tmp/${FILENAME}
 

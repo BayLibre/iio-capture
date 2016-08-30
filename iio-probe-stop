@@ -53,6 +53,9 @@ then
 	gnuplot /tmp/gnuplot-${IN_PROBE}
 fi
 
+if [ -z ${IN_FILENAME} ]; then
+    IN_FILENAME=/tmp/iio-probe/default-${IN_PROBE}
+fi
 uuid=`basename ${IN_FILENAME}` 
 
 mkdir /tmp/$uuid
@@ -62,5 +65,6 @@ cat $2 | awk 'BEGIN {FS=OFS=","}{t=$1;$1=$5;$5=t;print}' > /tmp/$uuid/data.csv
 
 if [ "${TEST}" == "false" ]; then
     #rsync -r /tmp/$uuid powerci@powerci.org:/var/www/html/kernel-ci/attachments
+    echo "rsync -r /tmp/$uuid ${REMOTE_ADDR}:${REMOTE_DIR}"
     rsync -r /tmp/$uuid ${REMOTE_ADDR}:${REMOTE_DIR}
 fi

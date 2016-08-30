@@ -4,7 +4,7 @@ set -x
 IN_ADDR=$1
 IN_PROBE=$2
 
-FILENAME="test/test"
+FILENAME="iio-probe/test"
 
 if [ -z "${IN_ADDR}" ];then
 	echo "Please provide an acme adress"

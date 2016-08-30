@@ -19,6 +19,10 @@ then
 	sudo rm -rf /tmp/pidfile-${IN_PROBE}
 fi
 
+if [ -z ${IN_FILENAME} ];then
+    IN_FILENAME=/tmp/iio-probe/default-${IN_PROBE}
+fi
+
 dir=`dirname ${IN_FILENAME}`
 mkdir -p $dir
 
